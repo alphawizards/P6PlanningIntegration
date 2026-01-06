@@ -30,16 +30,21 @@ def connect_to_p6():
     load_dotenv()
     
     # Get configuration from environment
-    p6_lib_dir = os.getenv('P6_LIB_DIR')
-    db_user = os.getenv('DB_USER')
-    db_pass = os.getenv('DB_PASS')
-    p6_user = os.getenv('P6_USER')
-    p6_pass = os.getenv('P6_PASS')
+    p6_lib_dir = os.getenv('P6_LIB_DIR', '').strip()
+    db_user = os.getenv('DB_USER', '').strip()
+    db_pass = os.getenv('DB_PASS', '')
+    p6_user = os.getenv('P6_USER', '').strip()
+    p6_pass = os.getenv('P6_PASS', '')
     
     # Validate required environment variables
     if not all([p6_lib_dir, db_user, db_pass, p6_user, p6_pass]):
         print("Error: Missing required environment variables.")
         print("Please ensure P6_LIB_DIR, DB_USER, DB_PASS, P6_USER, and P6_PASS are set.")
+        return False
+    
+    # Validate credentials are not empty after stripping whitespace
+    if not db_user or not p6_user:
+        print("Error: Username fields cannot be empty or whitespace only.")
         return False
     
     # Validate P6 library directory exists
@@ -88,12 +93,26 @@ def connect_to_p6():
         
     except jpype.JException as e:
         print(f"Error: Java exception occurred during P6 connection:")
-        print(f"  {type(e).__name__}: {str(e)}")
+        # Sanitize exception message to avoid exposing sensitive details
+        error_msg = str(e)
+        # Remove potential credential information from error messages
+        if db_pass and db_pass in error_msg:
+            error_msg = error_msg.replace(db_pass, "***")
+        if p6_pass and p6_pass in error_msg:
+            error_msg = error_msg.replace(p6_pass, "***")
+        print(f"  {type(e).__name__}: {error_msg}")
         return False
         
     except Exception as e:
         print(f"Error: Failed to connect to P6:")
-        print(f"  {type(e).__name__}: {str(e)}")
+        # Sanitize exception message to avoid exposing sensitive details
+        error_msg = str(e)
+        # Remove potential credential information from error messages
+        if db_pass and db_pass in error_msg:
+            error_msg = error_msg.replace(db_pass, "***")
+        if p6_pass and p6_pass in error_msg:
+            error_msg = error_msg.replace(p6_pass, "***")
+        print(f"  {type(e).__name__}: {error_msg}")
         return False
         
     finally:
