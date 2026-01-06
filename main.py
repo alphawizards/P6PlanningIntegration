@@ -48,6 +48,7 @@ def connect_to_p6():
         print(f"Error: P6 library directory not found: {p6_lib_dir}")
         return False
     
+    session = None
     try:
         # Dynamically build classpath from all JAR files in P6_LIB_DIR
         jar_files = list(lib_path.glob('*.jar'))
@@ -67,6 +68,7 @@ def connect_to_p6():
         print("JVM started successfully")
         
         # Import Primavera P6 Session class
+        # NOTE: This import must occur after JVM startup (JPype1 requirement)
         print("Importing Primavera P6 Session class...")
         from com.primavera.integration.client import Session
         
@@ -82,11 +84,6 @@ def connect_to_p6():
         print("✓ Successfully connected to Primavera P6!")
         print(f"✓ Session established for user: {p6_user}")
         
-        # Close the session
-        if session:
-            session.logout()
-            print("✓ Session logged out successfully")
-        
         return True
         
     except jpype.JException as e:
@@ -100,6 +97,14 @@ def connect_to_p6():
         return False
         
     finally:
+        # Close the session if it was created
+        if session is not None:
+            try:
+                session.logout()
+                print("✓ Session logged out successfully")
+            except Exception as e:
+                print(f"Warning: Error during session logout: {e}")
+        
         # Shutdown JVM
         if jpype.isJVMStarted():
             print("Shutting down JVM...")
