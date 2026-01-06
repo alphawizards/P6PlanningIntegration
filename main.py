@@ -12,6 +12,23 @@ import jpype
 import jpype.imports
 
 
+def _sanitize_error_message(error_msg, passwords):
+    """
+    Sanitize error message by removing password information.
+    
+    Args:
+        error_msg: The error message to sanitize
+        passwords: List of passwords to remove from the error message
+        
+    Returns:
+        Sanitized error message with passwords replaced by '***'
+    """
+    for password in passwords:
+        if password and password in error_msg:
+            error_msg = error_msg.replace(password, "***")
+    return error_msg
+
+
 def connect_to_p6():
     """
     Connect to Primavera P6 using JPype1.
@@ -94,24 +111,14 @@ def connect_to_p6():
     except jpype.JException as e:
         print(f"Error: Java exception occurred during P6 connection:")
         # Sanitize exception message to avoid exposing sensitive details
-        error_msg = str(e)
-        # Remove potential credential information from error messages
-        if db_pass and db_pass in error_msg:
-            error_msg = error_msg.replace(db_pass, "***")
-        if p6_pass and p6_pass in error_msg:
-            error_msg = error_msg.replace(p6_pass, "***")
+        error_msg = _sanitize_error_message(str(e), [db_pass, p6_pass])
         print(f"  {type(e).__name__}: {error_msg}")
         return False
         
     except Exception as e:
         print(f"Error: Failed to connect to P6:")
         # Sanitize exception message to avoid exposing sensitive details
-        error_msg = str(e)
-        # Remove potential credential information from error messages
-        if db_pass and db_pass in error_msg:
-            error_msg = error_msg.replace(db_pass, "***")
-        if p6_pass and p6_pass in error_msg:
-            error_msg = error_msg.replace(p6_pass, "***")
+        error_msg = _sanitize_error_message(str(e), [db_pass, p6_pass])
         print(f"  {type(e).__name__}: {error_msg}")
         return False
         
