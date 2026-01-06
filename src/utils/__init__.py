@@ -7,6 +7,12 @@ from .converters import (
     p6_iterator_to_list,
     p6_objects_to_dict_list,
 )
+from .file_manager import (
+    ensure_directory,
+    get_export_path,
+    get_timestamped_filename,
+    cleanup_old_exports,
+)
 
 __all__ = [
     'logger',
@@ -17,4 +23,8 @@ __all__ = [
     'java_value_to_python',
     'p6_iterator_to_list',
     'p6_objects_to_dict_list',
+    'ensure_directory',
+    'get_export_path',
+    'get_timestamped_filename',
+    'cleanup_old_exports',
 ]
