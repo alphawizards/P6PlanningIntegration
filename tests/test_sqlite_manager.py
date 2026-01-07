@@ -6,6 +6,7 @@ import pytest
 from datetime import datetime
 
 
+@pytest.mark.integration
 class TestSQLiteManagerConnection:
     """Tests for connection management."""
     
@@ -33,6 +34,7 @@ class TestSQLiteManagerConnection:
         assert len(sqlite_manager.db_path) > 0
 
 
+@pytest.mark.integration
 class TestSQLiteManagerImmutableMode:
     """Tests for immutable mode behavior."""
     
@@ -52,6 +54,7 @@ class TestSQLiteManagerImmutableMode:
             cursor.execute("INSERT INTO PROJECT (proj_id) VALUES (99999)")
 
 
+@pytest.mark.integration
 class TestSQLiteManagerRefresh:
     """Tests for connection refresh."""
     

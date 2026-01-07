@@ -1,0 +1,30 @@
+[MASTER]
+ignore=CVS
+ignore-patterns=
+persistent=yes
+load-plugins=
+jobs=1
+unsafe-load-any-extension=no
+
+[MESSAGES CONTROL]
+disable=
+    C0114, # missing-module-docstring
+    C0115, # missing-class-docstring
+    C0116, # missing-function-docstring
+    R0903, # too-few-public-methods
+    R0913, # too-many-arguments
+    W0511, # fixme
+
+[REPORTS]
+output-format=text
+files-output=no
+reports=yes
+score=yes
+
+[LOGGING]
+logging-modules=logging
+
+[FORMAT]
+max-line-length=100
+indent-string='    '
+expected-line-ending-format=

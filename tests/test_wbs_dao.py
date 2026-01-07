@@ -10,6 +10,7 @@ from unittest.mock import Mock, MagicMock
 class TestWBSDAOBasic:
     """Basic tests for WBSDAO."""
     
+    @pytest.mark.integration
     def test_get_wbs_hierarchy_returns_tree(self, sqlite_manager, project_dao):
         """Test fetching WBS hierarchy as tree."""
         projects = project_dao.get_active_projects()
