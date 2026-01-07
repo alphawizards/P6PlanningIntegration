@@ -1,3 +1,5 @@
 JPype1>=1.4.1
-pandas>=2.0.0  # For future data manipulation and analysis of P6 project data
+pandas>=2.0.0
 python-dotenv>=1.0.0
+litellm>=1.0.0
+openpyxl>=3.0.0  # For Excel export functionality

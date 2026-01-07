@@ -103,6 +103,38 @@ LOG_FILE = LOG_DIR / 'app.log'
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').strip().upper()
 
 # ============================================================================
+# AI/LLM CONFIGURATION
+# ============================================================================
+
+# LLM Provider: anthropic, openai, gemini
+LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'anthropic').strip().lower()
+
+if LLM_PROVIDER not in ['anthropic', 'openai', 'gemini']:
+    raise ValueError(
+        f"CRITICAL: LLM_PROVIDER must be 'anthropic', 'openai', or 'gemini', got: {LLM_PROVIDER}"
+    )
+
+# LLM API Key (optional - AI features disabled if not set)
+LLM_API_KEY = os.getenv('LLM_API_KEY', '').strip()
+
+# LLM Model
+LLM_MODEL_DEFAULTS = {
+    'anthropic': 'claude-3-5-sonnet-20241022',
+    'openai': 'gpt-4-turbo-preview',
+    'gemini': 'gemini-1.5-pro'
+}
+LLM_MODEL = os.getenv('LLM_MODEL', LLM_MODEL_DEFAULTS[LLM_PROVIDER]).strip()
+
+# LLM Temperature (0.0 - 1.0)
+LLM_TEMPERATURE = float(os.getenv('LLM_TEMPERATURE', '0.0'))
+
+# LLM Max Tokens
+LLM_MAX_TOKENS = int(os.getenv('LLM_MAX_TOKENS', '4096'))
+
+# AI Features Enabled (True if API key is set)
+AI_ENABLED = bool(LLM_API_KEY)
+
+# ============================================================================
 # CONFIGURATION SUMMARY
 # ============================================================================
 
@@ -121,4 +153,9 @@ def print_config_summary():
         print(f"DB_USER:       {DB_USER}")
         if DB_INSTANCE:
             print(f"DB_INSTANCE:   {DB_INSTANCE}")
+    print(f"AI_ENABLED:    {AI_ENABLED}")
+    if AI_ENABLED:
+        print(f"LLM_PROVIDER:  {LLM_PROVIDER}")
+        print(f"LLM_MODEL:     {LLM_MODEL}")
+        print(f"LLM_TEMP:      {LLM_TEMPERATURE}")
     print("=" * 60)

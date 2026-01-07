@@ -31,6 +31,8 @@ ACTIVITY_FIELDS: Final[List[str]] = [
     'PlannedDuration', # Planned duration in hours
     'StartDate',       # Actual or planned start date
     'FinishDate',      # Actual or planned finish date
+    'TotalFloat',      # Total float in hours (critical path indicator: <= 0 means critical)
+    'ProjectObjectId', # Project reference for relationship queries
 ]
 
 # ============================================================================
