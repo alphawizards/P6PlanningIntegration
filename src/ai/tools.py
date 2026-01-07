@@ -37,6 +37,9 @@ class P6Tools:
         self.relationship_dao = RelationshipDAO(session)
         self.context_generator = ContextGenerator()
         
+        # Proposal cache for execution workflow (Phase 7)
+        self._proposal_cache: Dict[str, Dict[str, Any]] = {}
+        
         logger.info("P6Tools initialized for AI agent")
     
     # ========================================================================
@@ -184,6 +187,50 @@ class P6Tools:
                         }
                     },
                     "required": ["activity_object_id"]
+                }
+            },
+            # Phase 7: Mining-Specific Analysis Tools
+            {
+                "name": "check_schedule_health",
+                "description": "Check schedule health using DCMA 14-point assessment principles. Identifies dangling logic, negative float, and high float issues. Use this when user asks to 'review the schedule' or 'check schedule health'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {
+                            "type": "integer",
+                            "description": "Project ObjectId"
+                        }
+                    },
+                    "required": ["project_id"]
+                }
+            },
+            {
+                "name": "validate_production_logic",
+                "description": "Validate production logic by comparing planned durations with theoretical durations (Volume / Rate). Flags activities with >10% variance. Use this when user asks about 'efficiency' or 'production rates'.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {
+                            "type": "integer",
+                            "description": "Project ObjectId"
+                        }
+                    },
+                    "required": ["project_id"]
+                }
+            },
+            # Phase 7: Execution Workflow
+            {
+                "name": "execute_approved_change",
+                "description": "Execute a previously proposed schedule change. Requires SAFE_MODE to be disabled. Only works with valid proposal_id from propose_schedule_change. This is the ONLY tool that actually modifies P6 data.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "proposal_id": {
+                            "type": "string",
+                            "description": "Unique proposal ID from propose_schedule_change (8-character hash)"
+                        }
+                    },
+                    "required": ["proposal_id"]
                 }
             }
         ]
@@ -546,9 +593,15 @@ class P6Tools:
             # Check SAFE_MODE
             safe_mode_enabled = self.session.safe_mode
             
+            # Generate unique proposal ID (Phase 7: Execution Workflow)
+            import hashlib
+            import time
+            proposal_id = hashlib.md5(f"{activity_object_id}:{time.time()}:{json.dumps(changes)}".encode()).hexdigest()[:8]
+            
             # Build proposal
             proposal = {
                 "success": True,
+                "proposal_id": proposal_id,
                 "proposal_type": "schedule_change",
                 "activity": {
                     "ObjectId": activity_object_id,
@@ -563,9 +616,20 @@ class P6Tools:
                 "rationale": rationale,
                 "safe_mode_enabled": safe_mode_enabled,
                 "requires_confirmation": True,
-                "confirmation_command": f"EXECUTE_CHANGE:{activity_object_id}:{json.dumps(changes)}",
+                "confirmation_command": f"execute_approved_change(proposal_id='{proposal_id}')",
                 "warning": "This change has NOT been applied. User confirmation required." if safe_mode_enabled else "SAFE_MODE is disabled - change can be executed after confirmation."
             }
+            
+            # Cache proposal for execution (Phase 7)
+            self._proposal_cache[proposal_id] = {
+                "activity_object_id": activity_object_id,
+                "changes": changes,
+                "rationale": rationale,
+                "timestamp": time.time(),
+                "current_values": current_activity
+            }
+            
+            logger.info(f"Proposal cached with ID: {proposal_id}")
             
             return json.dumps(proposal, indent=2)
             
@@ -629,6 +693,433 @@ class P6Tools:
             
         except Exception as e:
             logger.error(f"AI Tool error in analyze_schedule_impact: {e}")
+            return json.dumps({
+                "success": False,
+                "error": str(e)
+            })
+
+    # ========================================================================
+    # PHASE 7: MINING-SPECIFIC ANALYSIS TOOLS
+    # ========================================================================
+    
+    def check_schedule_health(self, project_id: int) -> str:
+        """
+        Check schedule health using DCMA 14-point assessment principles.
+        
+        Checks:
+        1. Dangling Logic - Activities with no predecessors or successors
+        2. Negative Float - Activities with TotalFloat < 0
+        3. High Float - Activities with TotalFloat > 44 days (1056 hours)
+        
+        VERIFICATION POINT 1: Production Logic
+        Handles missing data gracefully (no crash).
+        
+        Args:
+            project_id: Project ObjectId (int)
+            
+        Returns:
+            JSON string with health check results
+        """
+        try:
+            logger.info(f"AI Tool: check_schedule_health(project_id={project_id})")
+            
+            # Get all activities for project
+            activities_df = self.activity_dao.get_activities_for_project(project_id)
+            
+            if activities_df.empty:
+                return json.dumps({
+                    "success": False,
+                    "error": f"No activities found for project {project_id}"
+                })
+            
+            # Get all relationships for project
+            relationships_df = self.relationship_dao.get_relationships(project_id)
+            
+            # Initialize results
+            health_results = {
+                "success": True,
+                "project_id": project_id,
+                "total_activities": len(activities_df),
+                "checks": []
+            }
+            
+            # Check 1: Dangling Logic
+            # Activities with no predecessors or successors
+            dangling_activities = []
+            
+            if not relationships_df.empty:
+                # Get activities with predecessors
+                activities_with_pred = set(relationships_df['SuccessorObjectId'].dropna())
+                # Get activities with successors
+                activities_with_succ = set(relationships_df['PredecessorObjectId'].dropna())
+                # Activities with at least one connection
+                connected_activities = activities_with_pred | activities_with_succ
+                
+                # Find dangling activities
+                for _, activity in activities_df.iterrows():
+                    activity_oid = activity.get('ObjectId')
+                    if activity_oid not in connected_activities:
+                        dangling_activities.append({
+                            "ObjectId": activity_oid,
+                            "Id": activity.get('Id'),
+                            "Name": activity.get('Name'),
+                            "Status": activity.get('Status')
+                        })
+            else:
+                # No relationships at all - all activities are dangling
+                dangling_activities = [
+                    {
+                        "ObjectId": activity.get('ObjectId'),
+                        "Id": activity.get('Id'),
+                        "Name": activity.get('Name'),
+                        "Status": activity.get('Status')
+                    }
+                    for _, activity in activities_df.iterrows()
+                ]
+            
+            health_results["checks"].append({
+                "check_name": "Dangling Logic",
+                "description": "Activities with no predecessors or successors",
+                "status": "FAIL" if len(dangling_activities) > 0 else "PASS",
+                "count": len(dangling_activities),
+                "percentage": round(len(dangling_activities) / len(activities_df) * 100, 1),
+                "threshold": "0% (DCMA best practice)",
+                "issues": dangling_activities[:10]  # Limit to first 10
+            })
+            
+            # Check 2: Negative Float
+            # Activities with TotalFloat < 0
+            negative_float_activities = []
+            
+            if 'TotalFloat' in activities_df.columns:
+                for _, activity in activities_df.iterrows():
+                    total_float = activity.get('TotalFloat')
+                    if total_float is not None and total_float < 0:
+                        negative_float_activities.append({
+                            "ObjectId": activity.get('ObjectId'),
+                            "Id": activity.get('Id'),
+                            "Name": activity.get('Name'),
+                            "TotalFloat": total_float,
+                            "Status": activity.get('Status')
+                        })
+            
+            health_results["checks"].append({
+                "check_name": "Negative Float",
+                "description": "Activities with TotalFloat < 0 (schedule is behind)",
+                "status": "FAIL" if len(negative_float_activities) > 0 else "PASS",
+                "count": len(negative_float_activities),
+                "percentage": round(len(negative_float_activities) / len(activities_df) * 100, 1) if len(activities_df) > 0 else 0,
+                "threshold": "0% (DCMA best practice)",
+                "issues": negative_float_activities[:10]
+            })
+            
+            # Check 3: High Float
+            # Activities with TotalFloat > 44 days (1056 hours)
+            high_float_activities = []
+            high_float_threshold = 1056.0  # 44 days * 24 hours
+            
+            if 'TotalFloat' in activities_df.columns:
+                for _, activity in activities_df.iterrows():
+                    total_float = activity.get('TotalFloat')
+                    if total_float is not None and total_float > high_float_threshold:
+                        high_float_activities.append({
+                            "ObjectId": activity.get('ObjectId'),
+                            "Id": activity.get('Id'),
+                            "Name": activity.get('Name'),
+                            "TotalFloat": total_float,
+                            "TotalFloat_Days": round(total_float / 24, 1),
+                            "Status": activity.get('Status')
+                        })
+            
+            health_results["checks"].append({
+                "check_name": "High Float",
+                "description": f"Activities with TotalFloat > 44 days ({high_float_threshold} hours)",
+                "status": "WARNING" if len(high_float_activities) > 0 else "PASS",
+                "count": len(high_float_activities),
+                "percentage": round(len(high_float_activities) / len(activities_df) * 100, 1) if len(activities_df) > 0 else 0,
+                "threshold": "5% (DCMA best practice)",
+                "issues": high_float_activities[:10]
+            })
+            
+            # Overall health score
+            failed_checks = sum(1 for check in health_results["checks"] if check["status"] == "FAIL")
+            warning_checks = sum(1 for check in health_results["checks"] if check["status"] == "WARNING")
+            total_checks = len(health_results["checks"])
+            
+            health_results["overall_health"] = {
+                "total_checks": total_checks,
+                "passed": total_checks - failed_checks - warning_checks,
+                "failed": failed_checks,
+                "warnings": warning_checks,
+                "health_score": round((total_checks - failed_checks - warning_checks) / total_checks * 100, 1) if total_checks > 0 else 0,
+                "status": "HEALTHY" if failed_checks == 0 and warning_checks == 0 else "NEEDS ATTENTION" if failed_checks == 0 else "CRITICAL"
+            }
+            
+            return json.dumps(health_results, indent=2)
+            
+        except Exception as e:
+            logger.error(f"AI Tool error in check_schedule_health: {e}")
+            return json.dumps({
+                "success": False,
+                "error": str(e)
+            })
+
+    def validate_production_logic(self, project_id: int) -> str:
+        """
+        Validate production logic by comparing planned durations with theoretical durations.
+        
+        Logic: Theoretical Duration = Volume / Production Rate
+        Alert: If variance > 10%, flag as "Invalid Duration"
+        
+        VERIFICATION POINT 1: Production Logic
+        Correctly calculates Theoretical Duration = Volume / Rate
+        Handles missing UDFs gracefully (no crash).
+        
+        Args:
+            project_id: Project ObjectId (int)
+            
+        Returns:
+            JSON string with production validation results
+        """
+        try:
+            logger.info(f"AI Tool: validate_production_logic(project_id={project_id})")
+            
+            # Get all activities for project
+            activities_df = self.activity_dao.get_activities_for_project(project_id)
+            
+            if activities_df.empty:
+                return json.dumps({
+                    "success": False,
+                    "error": f"No activities found for project {project_id}"
+                })
+            
+            # Filter for production activities
+            # Look for activities with 'Production' in name or specific types
+            production_activities = activities_df[
+                activities_df['Name'].str.contains('Production|Drill|Blast|Muck|Haul', case=False, na=False)
+            ]
+            
+            if production_activities.empty:
+                return json.dumps({
+                    "success": True,
+                    "project_id": project_id,
+                    "message": "No production activities found (activities with 'Production', 'Drill', 'Blast', 'Muck', or 'Haul' in name)",
+                    "total_activities": len(activities_df),
+                    "production_activities": 0,
+                    "validation_results": []
+                })
+            
+            # Validate production logic
+            validation_results = []
+            invalid_count = 0
+            missing_udf_count = 0
+            
+            for _, activity in production_activities.iterrows():
+                activity_id = activity.get('Id')
+                activity_name = activity.get('Name')
+                planned_duration = activity.get('PlannedDuration')
+                
+                # Try to get UDFs (Volume and ProductionRate)
+                # For MVP, these may not exist - handle gracefully
+                volume = activity.get('Volume')  # UDF
+                production_rate = activity.get('ProductionRate')  # UDF
+                
+                result = {
+                    "ObjectId": activity.get('ObjectId'),
+                    "Id": activity_id,
+                    "Name": activity_name,
+                    "PlannedDuration": planned_duration,
+                    "Volume": volume,
+                    "ProductionRate": production_rate
+                }
+                
+                # Check if UDFs are available
+                if volume is None or production_rate is None:
+                    result["status"] = "MISSING_UDF"
+                    result["message"] = "Volume or ProductionRate UDF not available"
+                    missing_udf_count += 1
+                elif production_rate == 0:
+                    result["status"] = "ERROR"
+                    result["message"] = "ProductionRate is zero (division by zero)"
+                    invalid_count += 1
+                elif planned_duration is None or planned_duration == 0:
+                    result["status"] = "ERROR"
+                    result["message"] = "PlannedDuration is missing or zero"
+                    invalid_count += 1
+                else:
+                    # Calculate theoretical duration
+                    theoretical_duration = volume / production_rate
+                    variance = abs(planned_duration - theoretical_duration)
+                    variance_percentage = (variance / theoretical_duration * 100) if theoretical_duration > 0 else 0
+                    
+                    result["TheoreticalDuration"] = round(theoretical_duration, 2)
+                    result["Variance"] = round(variance, 2)
+                    result["VariancePercentage"] = round(variance_percentage, 1)
+                    
+                    # Check if variance > 10%
+                    if variance_percentage > 10:
+                        result["status"] = "INVALID"
+                        result["message"] = f"Duration variance {variance_percentage:.1f}% exceeds 10% threshold"
+                        invalid_count += 1
+                    else:
+                        result["status"] = "VALID"
+                        result["message"] = "Duration matches production logic"
+                
+                validation_results.append(result)
+            
+            # Summary
+            valid_count = len([r for r in validation_results if r["status"] == "VALID"])
+            
+            summary = {
+                "success": True,
+                "project_id": project_id,
+                "total_activities": len(activities_df),
+                "production_activities": len(production_activities),
+                "validation_summary": {
+                    "valid": valid_count,
+                    "invalid": invalid_count,
+                    "missing_udf": missing_udf_count,
+                    "total_validated": len(validation_results)
+                },
+                "validation_results": validation_results,
+                "recommendations": []
+            }
+            
+            # Add recommendations
+            if invalid_count > 0:
+                summary["recommendations"].append(
+                    f"⚠️ {invalid_count} production activities have duration variances > 10%. Review and adjust durations or production rates."
+                )
+            
+            if missing_udf_count > 0:
+                summary["recommendations"].append(
+                    f"ℹ️ {missing_udf_count} production activities are missing Volume or ProductionRate UDFs. Add UDFs for accurate validation."
+                )
+            
+            if valid_count == len(validation_results) and missing_udf_count == 0:
+                summary["recommendations"].append(
+                    "✅ All production activities have valid durations matching production logic."
+                )
+            
+            return json.dumps(summary, indent=2)
+            
+        except Exception as e:
+            logger.error(f"AI Tool error in validate_production_logic: {e}")
+            return json.dumps({
+                "success": False,
+                "error": str(e)
+            })
+
+    # ========================================================================
+    # PHASE 7: EXECUTION WORKFLOW
+    # ========================================================================
+    
+    def execute_approved_change(self, proposal_id: str) -> str:
+        """
+        Execute a previously proposed schedule change.
+        
+        VERIFICATION POINT 2: Execution Safety
+        Requires a "signature" (proposal_id) to prevent hallucination.
+        Only executes changes that were previously proposed and cached.
+        
+        VERIFICATION POINT 3: Write Permission
+        Checks global SAFE_MODE flag and fails if enabled.
+        Does NOT temporarily override SAFE_MODE.
+        
+        Args:
+            proposal_id: Unique proposal ID from propose_schedule_change
+            
+        Returns:
+            JSON string with execution result
+        """
+        try:
+            logger.info(f"AI Tool: execute_approved_change(proposal_id={proposal_id})")
+            
+            # VERIFICATION POINT 3: Check SAFE_MODE
+            if self.session.safe_mode:
+                return json.dumps({
+                    "success": False,
+                    "error": "SAFE_MODE is enabled",
+                    "message": "Cannot execute changes while SAFE_MODE is enabled. To execute changes:\n1. Set SAFE_MODE=false in .env file\n2. Restart the application\n3. Re-run the execution command",
+                    "safe_mode_enabled": True
+                })
+            
+            # VERIFICATION POINT 2: Validate proposal_id (signature)
+            if proposal_id not in self._proposal_cache:
+                return json.dumps({
+                    "success": False,
+                    "error": f"Invalid proposal_id: {proposal_id}",
+                    "message": "Proposal not found. The proposal may have expired or the ID is incorrect. Please generate a new proposal using propose_schedule_change.",
+                    "available_proposals": list(self._proposal_cache.keys())
+                })
+            
+            # Retrieve cached proposal
+            cached_proposal = self._proposal_cache[proposal_id]
+            activity_object_id = cached_proposal["activity_object_id"]
+            changes = cached_proposal["changes"]
+            rationale = cached_proposal["rationale"]
+            
+            logger.info(f"Executing proposal {proposal_id} for activity {activity_object_id}")
+            logger.info(f"Changes: {changes}")
+            
+            # Execute the change using ActivityDAO
+            try:
+                self.activity_dao.update_activity(activity_object_id, changes)
+                
+                # Get updated activity to confirm changes
+                updated_activity_df = self.activity_dao.get_activity_by_object_id(activity_object_id)
+                
+                if updated_activity_df.empty:
+                    return json.dumps({
+                        "success": False,
+                        "error": "Activity not found after update"
+                    })
+                
+                updated_activity = updated_activity_df.iloc[0].to_dict()
+                
+                # Convert dates for JSON
+                for key, value in updated_activity.items():
+                    if pd.isna(value):
+                        updated_activity[key] = None
+                    elif hasattr(value, 'isoformat'):
+                        updated_activity[key] = value.isoformat()
+                
+                # Remove proposal from cache (one-time use)
+                del self._proposal_cache[proposal_id]
+                
+                result = {
+                    "success": True,
+                    "proposal_id": proposal_id,
+                    "message": "Change executed successfully",
+                    "activity": {
+                        "ObjectId": activity_object_id,
+                        "Id": updated_activity.get('Id'),
+                        "Name": updated_activity.get('Name')
+                    },
+                    "executed_changes": changes,
+                    "rationale": rationale,
+                    "updated_values": {
+                        key: updated_activity.get(key)
+                        for key in changes.keys()
+                    },
+                    "timestamp": pd.Timestamp.now().isoformat()
+                }
+                
+                logger.info(f"Successfully executed proposal {proposal_id}")
+                
+                return json.dumps(result, indent=2)
+                
+            except Exception as dao_error:
+                logger.error(f"DAO error executing change: {dao_error}")
+                return json.dumps({
+                    "success": False,
+                    "error": f"Failed to execute change: {str(dao_error)}",
+                    "proposal_id": proposal_id,
+                    "activity_object_id": activity_object_id
+                })
+            
+        except Exception as e:
+            logger.error(f"AI Tool error in execute_approved_change: {e}")
             return json.dumps({
                 "success": False,
                 "error": str(e)
