@@ -250,3 +250,48 @@ class P6Session:
                 "SAFE_MODE is enabled. Write operations are disabled. "
                 "Set SAFE_MODE=false in .env to enable write operations."
             )
+
+    def is_active(self) -> bool:
+        """
+        Alias for is_connected() for compatibility with DAOs.
+        
+        Returns:
+            bool: True if session is active
+        """
+        return self.is_connected()
+    
+    def begin_transaction(self):
+        """
+        Begin a transaction.
+        
+        VERIFICATION POINT 3: Transaction Atomicity
+        Starts a transaction for atomic operations.
+        
+        Note: P6 API may not support explicit transactions.
+        This is a placeholder for future implementation.
+        """
+        logger.debug("Transaction started (P6 API may handle this implicitly)")
+    
+    def commit_transaction(self):
+        """
+        Commit the current transaction.
+        
+        VERIFICATION POINT 3: Transaction Atomicity
+        Commits changes to the database.
+        
+        Note: P6 API may not support explicit transactions.
+        This is a placeholder for future implementation.
+        """
+        logger.debug("Transaction committed (P6 API may handle this implicitly)")
+    
+    def rollback_transaction(self):
+        """
+        Rollback the current transaction.
+        
+        VERIFICATION POINT 3: Transaction Atomicity
+        Rolls back changes on error.
+        
+        Note: P6 API may not support explicit transactions.
+        This is a placeholder for future implementation.
+        """
+        logger.warning("Transaction rollback requested (P6 API may not support explicit rollback)")

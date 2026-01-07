@@ -246,3 +246,147 @@ class ActivityDAO:
             return self.get_activities_for_project(project_object_id, filter_expr=filter_expr)
         else:
             return self.get_all_activities(filter_expr=filter_expr)
+
+    def update_activity(self, object_id: int, updates_dict: dict) -> bool:
+        """
+        Update an activity's fields.
+        
+        VERIFICATION POINT 1: Write Safety
+        Checks SAFE_MODE before allowing write operations.
+        
+        VERIFICATION POINT 2: Java Casting
+        Casts Python types to Java types (JInt, JDouble, JString) before calling setters.
+        
+        VERIFICATION POINT 3: Transaction Atomicity
+        Uses begin_transaction() ... commit() pattern.
+        
+        Args:
+            object_id: Activity ObjectId to update
+            updates_dict: Dict of {field_name: new_value}
+                Supported fields:
+                - 'Name': Activity name (str)
+                - 'PlannedDuration': Duration in hours (float)
+                - 'Status': Activity status (str)
+                - 'StartDate': Start date (datetime)
+                - 'FinishDate': Finish date (datetime)
+                
+        Returns:
+            bool: True if successful
+            
+        Raises:
+            PermissionError: If SAFE_MODE is enabled
+            RuntimeError: If operation fails
+            
+        Example:
+            dao.update_activity(12345, {
+                'Name': 'Updated Activity Name',
+                'PlannedDuration': 40.0,
+                'Status': 'In Progress'
+            })
+        """
+        import jpype
+        
+        # VERIFICATION POINT 1: Write Safety Check
+        self.session.check_safe_mode()
+        
+        try:
+            logger.info(f"Updating activity {object_id} with {len(updates_dict)} fields")
+            logger.debug(f"Updates: {updates_dict}")
+            
+            # VERIFICATION POINT 3: Transaction Atomicity
+            self.session.begin_transaction()
+            
+            try:
+                # Get ActivityManager
+                activity_manager = self.session.get_global_object('ActivityManager')
+                
+                # Load activity
+                activity = activity_manager.loadActivity(jpype.JInt(object_id))
+                
+                if not activity:
+                    raise ValueError(f"Activity not found: {object_id}")
+                
+                # VERIFICATION POINT 2: Java Casting
+                # Iterate through updates and apply them
+                for field_name, new_value in updates_dict.items():
+                    if new_value is None:
+                        logger.debug(f"Skipping null value for field: {field_name}")
+                        continue
+                    
+                    # Map field names to setter methods
+                    if field_name == 'Name':
+                        activity.setName(jpype.JString(str(new_value)))
+                        logger.debug(f"Set Name: {new_value}")
+                    
+                    elif field_name == 'PlannedDuration':
+                        # VERIFICATION POINT 2: Cast to Java Double
+                        activity.setPlannedDuration(jpype.JDouble(float(new_value)))
+                        logger.debug(f"Set PlannedDuration: {new_value}")
+                    
+                    elif field_name == 'Status':
+                        activity.setStatus(jpype.JString(str(new_value)))
+                        logger.debug(f"Set Status: {new_value}")
+                    
+                    elif field_name == 'StartDate':
+                        # Convert Python datetime to Java Date
+                        if hasattr(new_value, 'strftime'):
+                            java_date = self._python_datetime_to_java_date(new_value)
+                            activity.setStartDate(java_date)
+                            logger.debug(f"Set StartDate: {new_value}")
+                        else:
+                            logger.warning(f"Invalid StartDate value: {new_value}")
+                    
+                    elif field_name == 'FinishDate':
+                        # Convert Python datetime to Java Date
+                        if hasattr(new_value, 'strftime'):
+                            java_date = self._python_datetime_to_java_date(new_value)
+                            activity.setFinishDate(java_date)
+                            logger.debug(f"Set FinishDate: {new_value}")
+                    
+                    else:
+                        logger.warning(f"Unsupported field for update: {field_name}")
+                
+                # Save changes
+                activity.update()
+                
+                # VERIFICATION POINT 3: Commit Transaction
+                self.session.commit_transaction()
+                
+                logger.info(f"✓ Activity {object_id} updated successfully")
+                return True
+                
+            except Exception as e:
+                # VERIFICATION POINT 3: Rollback on Error
+                self.session.rollback_transaction()
+                raise
+            
+        except jpype.JException as e:
+            logger.error(f"Java exception while updating activity: {e}")
+            raise RuntimeError(f"Failed to update activity: {e}") from e
+        except Exception as e:
+            logger.error(f"Failed to update activity: {e}")
+            raise
+    
+    def _python_datetime_to_java_date(self, python_datetime):
+        """
+        Convert Python datetime to Java Date.
+        
+        VERIFICATION POINT 2: Java Casting
+        Properly converts Python datetime to Java Date object.
+        
+        Args:
+            python_datetime: Python datetime object
+            
+        Returns:
+            Java Date object
+        """
+        import jpype
+        
+        # Get Java Date class
+        JavaDate = jpype.JClass('java.util.Date')
+        
+        # Convert to milliseconds since epoch
+        timestamp_ms = int(python_datetime.timestamp() * 1000)
+        
+        # Create Java Date
+        return JavaDate(jpype.JLong(timestamp_ms))

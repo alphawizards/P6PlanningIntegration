@@ -54,9 +54,13 @@ class XERParser(ScheduleParser):
             # Parse activities (tasks)
             activities_df = self._parse_activities(tables)
             
+            # Parse relationships (task predecessors)
+            relationships_df = self._parse_relationships(tables)
+            
             result = {
                 'projects': projects_df,
-                'activities': activities_df
+                'activities': activities_df,
+                'relationships': relationships_df
             }
             
             self.validate_result(result)
@@ -253,4 +257,56 @@ class XERParser(ScheduleParser):
         standardized = self._standardize_activity_dataframe(task_table, mapping)
         
         logger.info(f"Parsed {len(standardized)} activities from XER")
+        return standardized
+
+    def _parse_relationships(self, tables: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+        """
+        Parse TASKPRED table into standardized DataFrame.
+        
+        VERIFICATION POINT 1: Schema Alignment
+        Maps XER columns (pred_task_id, task_id, pred_type, lag_hr_cnt) to standard RELATIONSHIP_FIELDS.
+        
+        Args:
+            tables: Extracted XER tables
+            
+        Returns:
+            pd.DataFrame: Standardized relationships DataFrame
+        """
+        if 'TASKPRED' not in tables:
+            logger.warning("TASKPRED table not found in XER file")
+            return pd.DataFrame(columns=['ObjectId', 'PredecessorObjectId', 'SuccessorObjectId', 'Type', 'Lag'])
+        
+        taskpred_table = tables['TASKPRED']
+        
+        # VERIFICATION POINT 1: Schema Alignment
+        # XER to standard field mapping
+        mapping = {
+            'task_pred_id': 'ObjectId',
+            'pred_task_id': 'PredecessorObjectId',
+            'task_id': 'SuccessorObjectId',
+            'pred_type': 'Type',
+            'lag_hr_cnt': 'Lag',
+        }
+        
+        # Handle lag conversion (hours)
+        if 'lag_hr_cnt' in taskpred_table.columns:
+            taskpred_table['Lag'] = pd.to_numeric(
+                taskpred_table['lag_hr_cnt'],
+                errors='coerce'
+            ).fillna(0)
+        
+        # Map pred_type codes to readable names
+        if 'pred_type' in taskpred_table.columns:
+            type_map = {
+                'PR_FS': 'FS',  # Finish-to-Start
+                'PR_SS': 'SS',  # Start-to-Start
+                'PR_FF': 'FF',  # Finish-to-Finish
+                'PR_SF': 'SF',  # Start-to-Finish
+            }
+            taskpred_table['Type'] = taskpred_table['pred_type'].map(type_map).fillna(taskpred_table['pred_type'])
+        
+        # Standardize
+        standardized = self._standardize_relationship_dataframe(taskpred_table, mapping)
+        
+        logger.info(f"Parsed {len(standardized)} relationships from XER")
         return standardized

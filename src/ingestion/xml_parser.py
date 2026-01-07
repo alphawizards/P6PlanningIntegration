@@ -123,6 +123,7 @@ class UnifiedXMLParser(ScheduleParser):
         # Find project elements
         projects_data = []
         activities_data = []
+        relationships_data = []
         
         # P6 XML can have different structures
         # Try common paths
@@ -162,15 +163,34 @@ class UnifiedXMLParser(ScheduleParser):
                 }
                 activities_data.append(activity_data)
         
+        # Find relationship elements
+        relationship_elements = (
+            root.findall('.//Relationship') or
+            root.findall('.//ActivityRelationship') or
+            []
+        )
+        
+        for rel_elem in relationship_elements:
+            relationship_data = {
+                'ObjectId': self._get_text(rel_elem, 'ObjectId'),
+                'PredecessorObjectId': self._get_text(rel_elem, 'PredecessorActivityObjectId') or self._get_text(rel_elem, 'PredecessorId'),
+                'SuccessorObjectId': self._get_text(rel_elem, 'SuccessorActivityObjectId') or self._get_text(rel_elem, 'SuccessorId'),
+                'Type': self._get_text(rel_elem, 'Type') or self._get_text(rel_elem, 'RelationshipType'),
+                'Lag': self._parse_duration(self._get_text(rel_elem, 'Lag')),
+            }
+            relationships_data.append(relationship_data)
+        
         # Create DataFrames
         projects_df = pd.DataFrame(projects_data) if projects_data else pd.DataFrame(columns=['ObjectId', 'Id', 'Name', 'Status', 'PlanStartDate'])
         activities_df = pd.DataFrame(activities_data) if activities_data else pd.DataFrame(columns=['ObjectId', 'Id', 'Name', 'Status', 'PlannedDuration', 'StartDate', 'FinishDate'])
+        relationships_df = pd.DataFrame(relationships_data) if relationships_data else pd.DataFrame(columns=['ObjectId', 'PredecessorObjectId', 'SuccessorObjectId', 'Type', 'Lag'])
         
-        logger.info(f"Parsed P6 XML: {len(projects_df)} projects, {len(activities_df)} activities")
+        logger.info(f"Parsed P6 XML: {len(projects_df)} projects, {len(activities_df)} activities, {len(relationships_df)} relationships")
         
         return {
             'projects': projects_df,
-            'activities': activities_df
+            'activities': activities_df,
+            'relationships': relationships_df
         }
     
     def _parse_msp_xml(self, root: ET.Element) -> Dict[str, pd.DataFrame]:
@@ -226,11 +246,28 @@ class UnifiedXMLParser(ScheduleParser):
         
         activities_df = pd.DataFrame(activities_data) if activities_data else pd.DataFrame(columns=['ObjectId', 'Id', 'Name', 'Status', 'PlannedDuration', 'StartDate', 'FinishDate'])
         
-        logger.info(f"Parsed MS Project XML: {len(projects_df)} projects, {len(activities_df)} activities")
+        # Parse relationships (PredecessorLink)
+        relationships_data = []
+        predecessor_links = root.findall('.//PredecessorLink') or []
+        
+        for link_elem in predecessor_links:
+            relationship_data = {
+                'ObjectId': None,  # MS Project doesn't have relationship IDs
+                'PredecessorObjectId': self._get_text(link_elem, 'PredecessorUID'),
+                'SuccessorObjectId': self._get_text(link_elem, 'SuccessorUID') or self._get_text(link_elem, '../UID'),
+                'Type': self._map_msp_link_type(self._get_text(link_elem, 'Type')),
+                'Lag': self._parse_msp_duration(self._get_text(link_elem, 'LinkLag')),
+            }
+            relationships_data.append(relationship_data)
+        
+        relationships_df = pd.DataFrame(relationships_data) if relationships_data else pd.DataFrame(columns=['ObjectId', 'PredecessorObjectId', 'SuccessorObjectId', 'Type', 'Lag'])
+        
+        logger.info(f"Parsed MS Project XML: {len(projects_df)} projects, {len(activities_df)} activities, {len(relationships_df)} relationships")
         
         return {
             'projects': projects_df,
-            'activities': activities_df
+            'activities': activities_df,
+            'relationships': relationships_df
         }
     
     def _get_text(self, element: ET.Element, tag: str) -> Optional[str]:
@@ -358,3 +395,35 @@ class UnifiedXMLParser(ScheduleParser):
             return 'Not Started'
         except Exception:
             return 'Not Started'
+
+    def _map_msp_link_type(self, link_type: Optional[str]) -> str:
+        """
+        Map MS Project link type to standard relationship type.
+        
+        MS Project link types:
+        - 0 or FF: Finish-to-Finish
+        - 1 or FS: Finish-to-Start (default)
+        - 2 or SF: Start-to-Finish
+        - 3 or SS: Start-to-Start
+        
+        Args:
+            link_type: MS Project link type code or string
+            
+        Returns:
+            str: Standard type ('FS', 'SS', 'FF', 'SF')
+        """
+        if not link_type:
+            return 'FS'  # Default
+        
+        type_map = {
+            '0': 'FF',
+            '1': 'FS',
+            '2': 'SF',
+            '3': 'SS',
+            'FF': 'FF',
+            'FS': 'FS',
+            'SF': 'SF',
+            'SS': 'SS',
+        }
+        
+        return type_map.get(str(link_type).strip(), 'FS')

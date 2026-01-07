@@ -51,9 +51,13 @@ class MPXParser(ScheduleParser):
                 columns=['ObjectId', 'Id', 'Name', 'Status', 'PlannedDuration', 'StartDate', 'FinishDate']
             )
             
+            # MPX format doesn't typically include relationship data in the standard format
+            relationships_df = pd.DataFrame(columns=['ObjectId', 'PredecessorObjectId', 'SuccessorObjectId', 'Type', 'Lag'])
+            
             result = {
                 'projects': projects_df,
-                'activities': activities_df
+                'activities': activities_df,
+                'relationships': relationships_df
             }
             
             self.validate_result(result)

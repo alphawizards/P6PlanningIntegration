@@ -50,8 +50,8 @@ RESOURCE_FIELDS: Final[List[str]] = [
 
 RELATIONSHIP_FIELDS: Final[List[str]] = [
     'ObjectId',                # Unique internal identifier
-    'PredecessorActivityObjectId',  # Predecessor activity reference
-    'SuccessorActivityObjectId',    # Successor activity reference
+    'PredecessorObjectId',     # Predecessor activity reference
+    'SuccessorObjectId',       # Successor activity reference
     'Type',                    # Relationship type (e.g., FS, SS, FF, SF)
     'Lag',                     # Lag time in hours
 ]
