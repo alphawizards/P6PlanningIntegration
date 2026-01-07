@@ -1,6 +1,8 @@
 """Configuration package for P6 Planning Integration."""
 
 from .settings import (
+    P6_CONNECTION_MODE,
+    P6_DB_PATH,
     P6_LIB_DIR,
     P6_DB_TYPE,
     DB_USER,
@@ -16,6 +18,8 @@ from .settings import (
 )
 
 __all__ = [
+    'P6_CONNECTION_MODE',
+    'P6_DB_PATH',
     'P6_LIB_DIR',
     'P6_DB_TYPE',
     'DB_USER',
@@ -29,3 +33,4 @@ __all__ = [
     'LOG_LEVEL',
     'print_config_summary',
 ]
+

@@ -38,17 +38,52 @@ def _get_required_env(var_name: str) -> str:
 
 
 # ============================================================================
-# P6 LIBRARY CONFIGURATION
+# CONNECTION MODE CONFIGURATION
 # ============================================================================
 
-P6_LIB_DIR = _get_required_env('P6_LIB_DIR')
+# Connection mode: 'SQLITE' (local P6 Professional) or 'JAVA' (JPype Integration API)
+P6_CONNECTION_MODE = os.getenv('P6_CONNECTION_MODE', 'SQLITE').strip().upper()
 
-# Validate that the library directory exists
-_lib_path = Path(P6_LIB_DIR)
-if not _lib_path.exists() or not _lib_path.is_dir():
+if P6_CONNECTION_MODE not in ['SQLITE', 'JAVA']:
     raise ValueError(
-        f"CRITICAL: P6 library directory does not exist or is not a directory: {P6_LIB_DIR}"
+        f"CRITICAL: P6_CONNECTION_MODE must be 'SQLITE' or 'JAVA', got: {P6_CONNECTION_MODE}"
     )
+
+# ============================================================================
+# SQLITE CONFIGURATION (for P6 Professional Standalone)
+# ============================================================================
+
+P6_DB_PATH = os.getenv('P6_DB_PATH', '').strip()
+
+if P6_CONNECTION_MODE == 'SQLITE':
+    if not P6_DB_PATH:
+        raise ValueError(
+            "CRITICAL: P6_DB_PATH is required when P6_CONNECTION_MODE=SQLITE. "
+            "Set it to the path of your P6 SQLite database (e.g., S32DB001.db)"
+        )
+    _db_path = Path(P6_DB_PATH)
+    if not _db_path.exists():
+        raise ValueError(
+            f"CRITICAL: P6 SQLite database does not exist: {P6_DB_PATH}"
+        )
+
+# ============================================================================
+# P6 LIBRARY CONFIGURATION (for Java Integration API mode)
+# ============================================================================
+
+P6_LIB_DIR = os.getenv('P6_LIB_DIR', '').strip()
+
+if P6_CONNECTION_MODE == 'JAVA':
+    if not P6_LIB_DIR:
+        raise ValueError(
+            "CRITICAL: P6_LIB_DIR is required when P6_CONNECTION_MODE=JAVA. "
+            "Set it to the path containing P6 Integration API JAR files."
+        )
+    _lib_path = Path(P6_LIB_DIR)
+    if not _lib_path.exists() or not _lib_path.is_dir():
+        raise ValueError(
+            f"CRITICAL: P6 library directory does not exist or is not a directory: {P6_LIB_DIR}"
+        )
 
 # ============================================================================
 # DATABASE CONFIGURATION
@@ -143,7 +178,11 @@ def print_config_summary():
     print("=" * 60)
     print("Configuration Summary")
     print("=" * 60)
-    print(f"P6_LIB_DIR:    {P6_LIB_DIR}")
+    print(f"P6_CONNECTION_MODE: {P6_CONNECTION_MODE}")
+    if P6_CONNECTION_MODE == 'SQLITE':
+        print(f"P6_DB_PATH:    {P6_DB_PATH}")
+    else:
+        print(f"P6_LIB_DIR:    {P6_LIB_DIR}")
     print(f"P6_DB_TYPE:    {P6_DB_TYPE}")
     print(f"P6_USER:       {P6_USER}")
     print(f"SAFE_MODE:     {SAFE_MODE}")
@@ -159,3 +198,4 @@ def print_config_summary():
         print(f"LLM_MODEL:     {LLM_MODEL}")
         print(f"LLM_TEMP:      {LLM_TEMPERATURE}")
     print("=" * 60)
+
