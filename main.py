@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 P6 Local AI Agent - Primavera P6 Integration via JPype1
-Main entry point for Phase 4: Logic Network & Write Capabilities
+Main entry point for Phase 5: AI Agent Integration
 """
 
 import sys
+import argparse
 import jpype
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from src.core import P6Session
 from src.dao import ProjectDAO, ActivityDAO, RelationshipDAO
 from src.reporting import DataExporter, ContextGenerator
 from src.ingestion import XERParser, UnifiedXMLParser, MPXParser
+from src.ai import P6Agent
 from src.config import print_config_summary
 from src.utils import logger, log_exception
 
@@ -317,38 +319,195 @@ def test_database_connection():
         return 1
 
 
+def interactive_chat_mode(project_id: int = None):
+    """
+    Interactive chat mode with AI agent.
+    
+    Args:
+        project_id: Optional project ObjectId to analyze
+    """
+    print("=" * 70)
+    print("P6 Local AI Agent - Phase 5: AI Agent Integration")
+    print("=" * 70)
+    print()
+    print("🤖 Welcome to the P6 AI Assistant!")
+    print()
+    print("I can help you analyze and optimize your P6 schedules.")
+    print("Type 'help' for available commands, or 'exit' to quit.")
+    print()
+    
+    try:
+        # Display configuration summary
+        print_config_summary()
+        print()
+        
+        logger.info("Starting P6 AI Agent - Interactive Chat Mode")
+        
+        # Initialize and connect to P6
+        logger.info("Initializing P6 session...")
+        
+        with P6Session() as session:
+            logger.info("✓ Database Connection Established")
+            
+            # If no project_id specified, list projects and ask user to select
+            if project_id is None:
+                project_dao = ProjectDAO(session)
+                projects_df = project_dao.get_all_projects()
+                
+                if projects_df.empty:
+                    print("⚠ No projects found in database")
+                    print("Please add projects to your P6 database first.")
+                    return 1
+                
+                print("\n📂 Available Projects:")
+                print()
+                for i, row in projects_df.iterrows():
+                    print(f"{i+1}. {row['Name']} (ID: {row['Id']}, ObjectId: {row['ObjectId']})")
+                
+                print()
+                selection = input("Select a project number (or press Enter to skip): ").strip()
+                
+                if selection and selection.isdigit():
+                    idx = int(selection) - 1
+                    if 0 <= idx < len(projects_df):
+                        project_id = projects_df.iloc[idx]['ObjectId']
+                        print(f"\n✓ Selected project: {projects_df.iloc[idx]['Name']}")
+                    else:
+                        print("\n⚠ Invalid selection, continuing without project context")
+                else:
+                    print("\n⚠ No project selected, continuing without project context")
+            
+            # Initialize AI agent
+            print("\n🤖 Initializing AI Agent...")
+            agent = P6Agent(session, project_id)
+            
+            print("✓ AI Agent ready!")
+            print()
+            print("─" * 70)
+            print()
+            
+            # Main chat loop
+            while True:
+                try:
+                    # Get user input
+                    user_input = input("You: ").strip()
+                    
+                    # Check for exit commands
+                    if user_input.lower() in ['exit', 'quit', 'bye', 'goodbye']:
+                        print("\n👋 Goodbye! Have a great day!")
+                        break
+                    
+                    # Skip empty input
+                    if not user_input:
+                        continue
+                    
+                    # Process input through agent
+                    print()
+                    response = agent.chat(user_input)
+                    
+                    # Display response
+                    print(f"AI: {response}")
+                    print()
+                    print("─" * 70)
+                    print()
+                
+                except KeyboardInterrupt:
+                    print("\n\n👋 Interrupted. Goodbye!")
+                    break
+                
+                except Exception as e:
+                    logger.error(f"Error in chat loop: {e}")
+                    log_exception(logger, e)
+                    print(f"\n❌ Error: {e}")
+                    print("Please try again or type 'exit' to quit.")
+                    print()
+        
+        logger.info("P6 AI Agent session closed")
+        return 0
+    
+    except jpype.JException as e:
+        logger.error("Java exception occurred")
+        log_exception(logger, e)
+        print()
+        print("=" * 70)
+        print("Status: Failed - Java exception occurred")
+        print("See logs/app.log for details")
+        print("=" * 70)
+        return 1
+    
+    except Exception as e:
+        logger.error("Failed to start AI Agent")
+        log_exception(logger, e)
+        print()
+        print("=" * 70)
+        print("Status: Failed - See logs for details")
+        print("=" * 70)
+        return 1
+
+
 def main():
     """
     Main entry point for P6 Planning Integration.
     
-    Phase 4: Logic Network & Write Capabilities
-    - RelationshipDAO for reading logic network
-    - Safe write methods with SAFE_MODE guards
-    - Java type casting for JPype compatibility
-    - Transaction atomicity pattern
+    Phase 5: AI Agent Integration
+    - Interactive chat mode with AI agent
+    - Natural language queries
+    - Tool-based architecture
+    - SAFE_MODE awareness
     """
-    print("=" * 70)
-    print("P6 Local AI Agent - Phase 4: Logic Network & Write Capabilities")
-    print("=" * 70)
-    print()
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description='P6 Local AI Agent - Primavera P6 Integration',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py                    # Run Phase 4 database tests
+  python main.py --chat             # Interactive AI chat mode
+  python main.py --chat --project 123  # Chat mode with specific project
+  python main.py project.xer        # File ingestion mode
+  python main.py --help             # Show this help message
+
+Modes:
+  1. Database Test Mode (default): Verify Phase 4 functionality
+  2. AI Chat Mode (--chat): Interactive natural language interface
+  3. File Ingestion Mode (filepath): Parse XER/XML/MPX files
+        """
+    )
     
-    # Check for command-line arguments
-    if len(sys.argv) > 1:
-        # File ingestion mode
-        filepath = sys.argv[1]
-        test_file_ingestion(filepath)
+    parser.add_argument(
+        'filepath',
+        nargs='?',
+        help='Path to schedule file (.xer, .xml, .mpx) for ingestion mode'
+    )
+    
+    parser.add_argument(
+        '--chat',
+        action='store_true',
+        help='Start interactive AI chat mode'
+    )
+    
+    parser.add_argument(
+        '--project',
+        type=int,
+        metavar='PROJECT_ID',
+        help='Project ObjectId for AI chat mode (optional)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Determine mode
+    if args.chat:
+        # AI Chat Mode
+        return interactive_chat_mode(args.project)
+    
+    elif args.filepath:
+        # File Ingestion Mode
+        test_file_ingestion(args.filepath)
+        return 0
+    
     else:
-        # Database connection mode (default)
-        print("Usage Options:")
-        print("  1. Database mode (default): python main.py")
-        print("  2. File ingestion mode: python main.py <filepath>")
-        print()
-        print("Running in database mode...")
-        print()
-        
+        # Database Test Mode (default)
         return test_database_connection()
-    
-    return 0
 
 
 if __name__ == "__main__":
