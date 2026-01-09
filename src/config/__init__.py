@@ -15,6 +15,11 @@ from .settings import (
     LOG_FILE,
     LOG_LEVEL,
     print_config_summary,
+    # P6 GUI Automation
+    P6_EXECUTABLE_PATH,
+    P6_DEFAULT_LAYOUT,
+    PDF_PRINTER_NAME,
+    PDF_OUTPUT_DIR,
 )
 
 __all__ = [
@@ -32,5 +37,10 @@ __all__ = [
     'LOG_FILE',
     'LOG_LEVEL',
     'print_config_summary',
+    # P6 GUI Automation
+    'P6_EXECUTABLE_PATH',
+    'P6_DEFAULT_LAYOUT',
+    'PDF_PRINTER_NAME',
+    'PDF_OUTPUT_DIR',
 ]
 
