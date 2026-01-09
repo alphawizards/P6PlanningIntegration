@@ -6,6 +6,7 @@ import pytest
 import pandas as pd
 
 
+@pytest.mark.integration
 class TestActivityDAOBasic:
     """Basic tests for ActivityDAO."""
     
@@ -30,6 +31,7 @@ class TestActivityDAOBasic:
                 assert col in result.columns, f"Missing column: {col}"
 
 
+@pytest.mark.integration
 class TestActivityDAODurationConversion:
     """Tests for duration conversion (hours -> days)."""
     

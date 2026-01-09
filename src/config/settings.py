@@ -170,6 +170,25 @@ LLM_MAX_TOKENS = int(os.getenv('LLM_MAX_TOKENS', '4096'))
 AI_ENABLED = bool(LLM_API_KEY)
 
 # ============================================================================
+# P6 GUI AUTOMATION CONFIGURATION
+# ============================================================================
+
+# Path to P6 Professional executable
+P6_EXECUTABLE_PATH = os.getenv(
+    'P6_EXECUTABLE_PATH',
+    r'C:\Program Files\Oracle\Primavera P6\P6 Professional\PM.exe'
+).strip()
+
+# Default layout for printing
+P6_DEFAULT_LAYOUT = os.getenv('P6_DEFAULT_LAYOUT', 'Standard Layout').strip()
+
+# PDF printer name
+PDF_PRINTER_NAME = os.getenv('PDF_PRINTER_NAME', 'Microsoft Print to PDF').strip()
+
+# PDF output directory
+PDF_OUTPUT_DIR = os.getenv('PDF_OUTPUT_DIR', 'reports/pdf').strip()
+
+# ============================================================================
 # CONFIGURATION SUMMARY
 # ============================================================================
 

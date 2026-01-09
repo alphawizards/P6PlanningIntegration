@@ -6,6 +6,7 @@ import pytest
 import pandas as pd
 
 
+@pytest.mark.integration
 class TestRelationshipDAOBasic:
     """Basic tests for RelationshipDAO."""
     
@@ -29,6 +30,7 @@ class TestRelationshipDAOBasic:
                 assert col in result.columns, f"Missing column: {col}"
 
 
+@pytest.mark.integration
 class TestRelationshipDAOLagConversion:
     """Tests for lag conversion (hours -> days)."""
     
@@ -51,6 +53,7 @@ class TestRelationshipDAOLagConversion:
         pytest.skip("No relationships found in test projects")
 
 
+@pytest.mark.integration
 class TestRelationshipDAOWriteProtection:
     """Tests for write protection."""
     

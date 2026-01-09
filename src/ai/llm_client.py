@@ -226,6 +226,10 @@ class LLMClient:
                     {"role": "system", "content": system_prompt}
                 ] + messages
             
+            # Use Native Gemini if provider is gemini
+            if self.provider == 'gemini':
+                return self._chat_native_gemini(messages)
+            
             # Format model name
             model = self._format_model_name()
             
@@ -256,6 +260,68 @@ class LLMClient:
         
         except Exception as e:
             logger.error(f"Error calling LLM: {e}")
+            raise
+
+    def _chat_native_gemini(self, messages: List[Dict[str, str]]) -> str:
+        """
+        Native Gemini implementation using google-generativeai SDK.
+        Bypasses litellm issues.
+        """
+        try:
+            import google.generativeai as genai
+            
+            genai.configure(api_key=self.api_key)
+            
+            # Clean model name (remove 'gemini/' prefix if from litellm config)
+            model_name = self.model.replace('gemini/', '')
+            
+            # Helper to convert roles
+            def map_role(r):
+                return 'model' if r == 'assistant' else 'user'
+            
+            # Build history
+            history = []
+            # We need to split history from the last message (prompt)
+            # Gemini's start_chat takes history, then we send the last msg
+            
+            if not messages:
+                return ""
+            
+            # Filter valid roles for Gemini (user/model)
+            # System instructions are set on model init in SDK 1.5+
+            system_instruction = None
+            valid_messages = []
+            
+            for m in messages:
+                if m['role'] == 'system':
+                    system_instruction = m['content']
+                elif m['role'] in ['user', 'assistant']:
+                    valid_messages.append({
+                        'role': map_role(m['role']),
+                        'parts': [m['content']]
+                    })
+            
+            if not valid_messages:
+                return "I'm ready."
+
+            last_msg = valid_messages.pop()
+            
+            # Initialize model
+            model = genai.GenerativeModel(
+                model_name,
+                system_instruction=system_instruction
+            )
+            
+            chat = model.start_chat(history=valid_messages)
+            response = chat.send_message(last_msg['parts'][0])
+            
+            return response.text
+            
+        except ImportError:
+            logger.error("google-generativeai not installed")
+            raise RuntimeError("Install google-generativeai")
+        except Exception as e:
+            logger.error(f"Native Gemini Error: {e}")
             raise
     
     def format_tool_result_message(self, tool_call_id: str, tool_name: str, result: str) -> Dict[str, Any]:

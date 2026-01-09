@@ -6,6 +6,7 @@ import pytest
 import pandas as pd
 
 
+@pytest.mark.integration
 class TestProjectDAOBasic:
     """Basic tests for ProjectDAO."""
     
@@ -27,6 +28,7 @@ class TestProjectDAOBasic:
         assert len(result) > 0, "Expected at least one project"
 
 
+@pytest.mark.integration
 class TestProjectDAOFiltering:
     """Tests for ProjectDAO filtering."""
     
