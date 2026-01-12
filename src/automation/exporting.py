@@ -23,12 +23,12 @@ except ImportError:
 
 from src.config import PDF_OUTPUT_DIR
 from src.utils import logger
-from ..exceptions import (
+from .exceptions import (
     P6ExportError,
     P6TimeoutError,
     P6WindowNotFoundError
 )
-from ..utils import (
+from .utils import (
     retry,
     wait_for_condition,
     sanitize_filename,
