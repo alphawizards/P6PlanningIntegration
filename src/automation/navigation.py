@@ -22,11 +22,11 @@ except ImportError:
     PYWINAUTO_AVAILABLE = False
 
 from src.utils import logger
-from ..exceptions import (
+from .exceptions import (
     P6WindowNotFoundError,
     P6TimeoutError
 )
-from ..utils import (
+from .utils import (
     retry,
     wait_for_condition
 )

@@ -37,13 +37,13 @@ from src.config import (
     SAFE_MODE
 )
 from src.utils import logger
-from ..exceptions import (
+from .exceptions import (
     P6NotFoundError,
     P6ConnectionError,
     P6LoginError,
     P6TimeoutError
 )
-from ..utils import (
+from .utils import (
     retry,
     wait_for_condition,
     get_timestamp
