@@ -1,0 +1,103 @@
+================================================================================
+  P6 SUMMARY SCHEDULE GENERATOR - QUICK START GUIDE
+================================================================================
+
+📋 WHAT IT DOES
+---------------
+Converts Excel WBS summary data into P6 XER format for import into Primavera P6.
+
+⚡ QUICK RUN (3 STEPS)
+---------------------
+
+1. Install Dependencies
+   pip install pandas openpyxl
+
+2. Run Script
+   cd scripts
+   python generate_summary_schedule.py
+
+3. Import to P6
+   File → Import → output/19282_Summary_Schedule_Generated.xer
+
+
+📂 FILE LOCATIONS
+-----------------
+
+INPUT FILES (You provide):
+   templates/19282-FS-Summary-FS-EXE.xer    ← P6 template (provided)
+   input/WBS Summary.xlsx                    ← Your Excel data
+
+OUTPUT FILES (Generated):
+   output/19282_Summary_Schedule_Generated.xer  ← Import this to P6
+
+
+📊 EXCEL FORMAT REQUIRED
+------------------------
+
+Your Excel file must have these columns:
+
+   Column Name         Type      Required    Example
+   ────────────────   ──────    ────────    ─────────────────────────
+   WBS Code           Text      Yes         19282-FS-CURRENT-35.6.11
+   WBS Name           Text      Yes         Key Milestones
+   Total Activities   Number    Yes         5  (rows with 0 excluded)
+   Start              Date      Yes         2026-01-19
+   Finish             Date      Yes         2027-08-17
+
+
+✅ SUCCESS INDICATORS
+---------------------
+
+When script runs successfully, you'll see:
+
+   ✓ Loaded XX rows from Excel
+   ✓ Filtered out XX rows with zero/empty activities
+   ✓ Remaining rows: XX
+   ✓ Generated XX tasks from summary data
+   ✓ Successfully generated summary schedule
+
+
+🔧 TROUBLESHOOTING
+------------------
+
+Problem: "Template XER not found"
+Solution: Verify file exists at: templates/19282-FS-Summary-FS-EXE.xer
+
+Problem: "Summary Excel not found"
+Solution: Verify file exists at: input/WBS Summary.xlsx
+
+Problem: "ModuleNotFoundError: No module named 'pandas'"
+Solution: Run: pip install pandas openpyxl
+
+Problem: "Invalid dates" warnings
+Solution: Check date format in Excel, script will continue but may have blank dates
+
+Problem: No tasks generated
+Solution: Check that Excel has rows where "Total Activities" > 0
+
+
+📖 MORE HELP
+------------
+
+Quick Start:        README.md
+Technical Docs:     docs/README_generate_summary_schedule.md
+File Structure:     docs/FILE_STRUCTURE.md
+Visual Tree:        DIRECTORY_TREE.txt
+
+
+🎯 TYPICAL OUTPUT
+-----------------
+
+2026-01-20 12:16:36 | INFO | P6 Summary Schedule Generator
+2026-01-20 12:16:37 | INFO | Loaded 66 rows from Excel
+2026-01-20 12:16:37 | INFO | Filtered out 12 rows with zero/empty activities
+2026-01-20 12:16:37 | INFO | Remaining rows: 54
+2026-01-20 12:16:37 | INFO | Project ID: 48408
+2026-01-20 12:16:37 | INFO | Root WBS ID: 1256467
+2026-01-20 12:16:37 | INFO | Generated 54 tasks from summary data
+2026-01-20 12:16:37 | INFO | ✓ Successfully generated summary schedule
+
+
+================================================================================
+Need more help? See README.md or docs/README_generate_summary_schedule.md
+================================================================================

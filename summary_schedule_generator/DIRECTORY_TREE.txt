@@ -1,0 +1,280 @@
+P6 SUMMARY SCHEDULE GENERATOR - DIRECTORY TREE
+==============================================
+Generated: 2026-01-20 12:16
+
+C:\Users\ckr_4\01 Projects\P6PlanningIntegration\summary_schedule_generator\
+│
+├── 📄 README.md                                              [10 KB]  ★ START HERE
+│   └── Quick start guide, installation, basic usage
+│
+├── 📄 DIRECTORY_TREE.txt                                     [This file]
+│   └── Visual file structure reference
+│
+├── 📁 docs\                                                  Documentation
+│   │
+│   ├── 📄 README_generate_summary_schedule.md                [15 KB]
+│   │   └── Detailed technical documentation
+│   │       ├── Usage instructions
+│   │       ├── Field mapping reference
+│   │       ├── Troubleshooting guide
+│   │       ├── Customization examples
+│   │       └── XER format details
+│   │
+│   └── 📄 FILE_STRUCTURE.md                                  [12 KB]
+│       └── File structure guide
+│           ├── Complete file tree
+│           ├── File descriptions
+│           ├── Data flow diagrams
+│           └── Maintenance guidelines
+│
+├── 📁 scripts\                                               Executable Scripts
+│   │
+│   └── 📄 generate_summary_schedule.py                       [20 KB]  ★ MAIN SCRIPT
+│       └── Main generator script (502 lines)
+│           ├── Loads Excel from input/
+│           ├── Parses template from templates/
+│           ├── Generates P6 tasks
+│           └── Writes XER to output/
+│
+├── 📁 templates\                                             P6 Template Files
+│   │
+│   └── 📄 19282-FS-Summary-FS-EXE.xer                        [50 KB]  ★ TEMPLATE
+│       └── P6 project template (Tab-delimited)
+│           ├── Project ID: 48408
+│           ├── Root WBS ID: 1256467
+│           ├── Calendar ID: 99599
+│           └── Contains:
+│               ├── ERMHDR (P6 header v15.1)
+│               ├── PROJECT (project metadata)
+│               ├── PROJWBS (WBS structure, 11 elements)
+│               ├── CALENDAR (4 calendars)
+│               ├── CURRTYPE (20 currencies)
+│               └── Other metadata tables (12 tables)
+│
+├── 📁 input\                                                 Input Data Files
+│   │
+│   └── 📄 WBS Summary.xlsx                                   [13 KB]  ★ INPUT DATA
+│       └── Excel with WBS summary data
+│           ├── Total rows: 66
+│           ├── Valid rows: 54 (12 filtered)
+│           └── Columns:
+│               ├── WBS Code          (→ task_code)
+│               ├── WBS Name          (→ task_name)
+│               ├── Total Activities  (filter: must be > 0)
+│               ├── Remaining Duration (not used)
+│               ├── Start             (→ target_start_date)
+│               └── Finish            (→ target_end_date)
+│
+└── 📁 output\                                                Generated Output
+    │
+    └── 📄 19282_Summary_Schedule_Generated.xer               [50 KB]  ★ OUTPUT
+        └── Generated P6 schedule (Tab-delimited)
+            ├── Generated: 2026-01-20 12:16
+            ├── Tasks: 54 activities
+            ├── Task IDs: 4600000-4600053
+            ├── All linked to Root WBS: 1256467
+            └── Ready for P6 import
+
+
+FILE DESCRIPTIONS
+=================
+
+★ CRITICAL FILES - Required for operation
+-------------------------------------------
+
+1. generate_summary_schedule.py
+   Purpose:     Main executable script
+   Size:        20 KB (502 lines)
+   Language:    Python 3.8+
+   Dependencies: pandas, openpyxl
+   Entry Point: main() function
+
+2. 19282-FS-Summary-FS-EXE.xer (Template)
+   Purpose:     P6 project structure template
+   Size:        50 KB
+   Format:      Tab-delimited text (Windows-1252)
+   Contains:    Project metadata, WBS, calendars
+
+3. WBS Summary.xlsx (Input)
+   Purpose:     Summary data for schedule generation
+   Size:        13 KB
+   Format:      Excel .xlsx
+   Rows:        66 (54 valid after filtering)
+
+
+📖 DOCUMENTATION FILES
+----------------------
+
+1. README.md (Root)
+   Purpose:  Quick start guide
+   Audience: All users
+   Content:  Installation, basic usage, configuration
+
+2. README_generate_summary_schedule.md (docs/)
+   Purpose:  Technical reference
+   Audience: Developers, advanced users
+   Content:  Detailed API, field mapping, troubleshooting
+
+3. FILE_STRUCTURE.md (docs/)
+   Purpose:  File organization guide
+   Audience: All users
+   Content:  File tree, relationships, data flow
+
+4. DIRECTORY_TREE.txt (This file)
+   Purpose:  Quick visual reference
+   Audience: All users
+   Content:  File structure at a glance
+
+
+📊 OUTPUT FILES
+---------------
+
+1. 19282_Summary_Schedule_Generated.xer
+   Purpose:   Generated P6 schedule
+   Size:      ~50 KB
+   Format:    Tab-delimited text (Windows-1252)
+   Tasks:     54 activities from Excel
+   Status:    Ready for P6 import
+
+
+USAGE WORKFLOW
+==============
+
+Step 1: Prepare Input
+----------------------
+   Place Excel file in:  input/WBS Summary.xlsx
+   Verify columns:       WBS Code, WBS Name, Total Activities, Start, Finish
+
+Step 2: Run Script
+------------------
+   Navigate to:          scripts/
+   Execute:              python generate_summary_schedule.py
+
+Step 3: Review Output
+---------------------
+   Check logs:           Console output (INFO/WARNING/ERROR)
+   Locate output:        output/19282_Summary_Schedule_Generated.xer
+   Verify size:          ~50 KB
+
+Step 4: Import to P6
+--------------------
+   Open P6:              Professional Client
+   File → Import:        Select generated XER
+   Review summary:       Verify task count (54)
+   Complete import:      Accept defaults or customize
+
+
+DATA FLOW
+=========
+
+[Excel Input]                [Template XER]
+     │                             │
+     │    ┌───────────────────────┐│
+     └───→│  generate_summary_    ││
+          │  schedule.py          │←┘
+          │                       │
+          │  1. Load Excel        │
+          │  2. Parse template    │
+          │  3. Extract metadata  │
+          │  4. Generate tasks    │
+          │  5. Write XER         │
+          └───────────┬───────────┘
+                      │
+                      ▼
+              [Output XER]
+                      │
+                      ▼
+              [Import to P6]
+
+
+FIELD MAPPING
+=============
+
+Excel Column         →  XER Field            Type
+─────────────────────   ─────────────────   ──────
+WBS Code             →  task_code           Text
+WBS Name             →  task_name           Text
+Start                →  target_start_date   DateTime
+Start                →  early_start_date    DateTime
+Start                →  late_start_date     DateTime
+Finish               →  target_end_date     DateTime
+Finish               →  early_end_date      DateTime
+Finish               →  late_end_date       DateTime
+Total Activities     →  (filter only)       Number
+Remaining Duration   →  (not used)          Number
+
+Auto-generated:
+    task_id          →  4600000, 4600001, ... (sequential)
+    proj_id          →  48408 (from template)
+    wbs_id           →  1256467 (root WBS from template)
+    clndr_id         →  99599 (from template)
+    task_type        →  TT_Task (fixed)
+    duration_type    →  DT_FixedDUR2 (fixed)
+    status_code      →  TK_Active or TK_NotStart (calculated)
+
+
+FILE SIZES
+==========
+
+File Type                   Typical Size    Notes
+─────────────────────────   ────────────   ──────────────────────
+Python Script               20 KB          502 lines
+Template XER                50 KB          Full P6 structure
+Input Excel                 10-15 KB       Varies with data
+Output XER                  50 KB          Template + generated tasks
+Documentation (each)        10-15 KB       Markdown format
+
+
+QUICK REFERENCE
+===============
+
+To run the script:
+    cd C:\Users\ckr_4\01 Projects\P6PlanningIntegration\summary_schedule_generator\scripts
+    python generate_summary_schedule.py
+
+To customize paths:
+    Edit generate_summary_schedule.py → main() function
+
+To add new template:
+    Place in templates/ folder
+    Update script paths
+
+To process different Excel:
+    Place in input/ folder
+    Update script paths (or rename to WBS Summary.xlsx)
+
+
+DEPENDENCIES
+============
+
+Python Packages:
+    pandas      - Data manipulation
+    openpyxl    - Excel file reading
+
+Install:
+    pip install pandas openpyxl
+
+
+SUPPORT
+=======
+
+Documentation:          See docs/README_generate_summary_schedule.md
+File Structure:         See docs/FILE_STRUCTURE.md
+Quick Start:            See README.md
+Script Source:          See scripts/generate_summary_schedule.py
+
+For issues:
+    1. Check log output
+    2. Verify input files exist
+    3. Review documentation
+    4. Check date formats in Excel
+
+
+VERSION INFO
+============
+
+Version:        1.0
+Date:           2026-01-20
+Author:         Senior Python Developer & P6 Data Engineer
+Project:        GEMCO Water Disposal Project
+P6 Version:     15.1
