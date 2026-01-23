@@ -3,7 +3,15 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Skill(xlsx)",
+      "Skill(xlsx:*)",
+      "Bash(pip install:*)",
+      "Bash(dir \"C:\\\\Users\\\\ckr_4\\\\01 Web Projects\\\\P6PlanningIntegration\\\\summary_schedule_generator\\\\scripts\")",
+      "Bash(git push:*)",
+      "Bash(gh pr create --title \"feat: Add GEMCO L1 Summary Schedule Generator\" --body \"$\\(cat <<''EOF''\n## Summary\n- Add automated Python script to convert GEMCO Excess Water Disposal L1 Summary Schedule from visual Gantt chart to P6-compatible Excel format\n- Generate 32 activities with sequential IDs, durations, and WBS structure\n- Create dedicated output folder structure for Excel files\n\n## Features Added\n\n### Python Script\n- **generate_gemco_l1_schedule.py**: Automated generator for GEMCO L1 schedule\n  - Extracts 32 activities from visual Gantt chart\n  - Sequential Activity IDs: A1000-A1310 \\(increments of 10\\)\n  - Duration estimates based on timeline analysis \\(30-240 days\\)\n  - P6-compatible Excel format with proper column mapping\n  - Automatic output directory creation\n\n### Output Structure\n```\nsummary_schedule_generator/\n├── output/\n│   └── excel/\n│       └── GEMCO-L1-Summary-Schedule-Activities.xlsx\n└── scripts/\n    └── generate_gemco_l1_schedule.py\n```\n\n### Template & Source Files\n- **18030-PFS-CURRENT-1-Activities.xlsx**: P6 import template with proper column structure\n- **GEMCO Excess Water Disposal L1 Summary Schedule Updated - Rev B.xlsx**: Source Gantt chart\n\n## Key Activities Included\n1. Environmental approvals \\(SER submissions, Tier 2 assessments\\)\n2. Engineering tollgates \\(ES to NH2, NH2 to Ocean\\)\n3. Procurement activities \\(pumps, HDPE piping, structural fabrication\\)\n4. Construction phases \\(onshore/offshore, pipeline installation\\)\n5. Mining preparation and early works\n6. Commissioning and project closeout\n\n## Technical Details\n- **Column Mapping**: task_code, status_code, wbs_id, task_name, start_date, end_date, target_drtn_hr_cnt\n- **Duration Format**: Days \\(integer values\\)\n- **Status**: All activities set to \"Not Started\"\n- **WBS Structure**: GEMCO-L1.1 through GEMCO-L1.32\n\n## Usage\n```bash\npython summary_schedule_generator/scripts/generate_gemco_l1_schedule.py\n```\n\n## Test Plan\n- [x] Script executes without errors\n- [x] Output Excel file created in correct location\n- [x] All 32 activities populated with correct data\n- [x] Template column structure preserved\n- [x] Sequential Activity IDs generated correctly\n- [x] Duration values calculated from Gantt timeline\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\nEOF\n\\)\")",
+      "Bash(dir \"C:\\\\Users\\\\ckr_4\\\\OneDrive\\\\PROJECTS\\\\AI_Agents\\\\.agent\" /s /b)",
+      "Bash(dir:*)"
     ]
   }
 }
