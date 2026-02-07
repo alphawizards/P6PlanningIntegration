@@ -32,10 +32,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Claude closes the current project and returns to EPS view
   5. Claude tracks which project is open, which view is active, and which layout is applied
   6. Claude recovers from unexpected P6 states (modal dialogs, timeouts, element not found)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD during planning
+- [ ] 01-01-PLAN.md -- Refine connection foundation and error handling (no-retry, dialog detection)
+- [ ] 01-02-PLAN.md -- Right-click project open, close confirmation, Ctrl+F navigation
+- [ ] 01-03-PLAN.md -- State tracker, package integration, human verification against real P6
 
 ### Phase 2: Activity Editing with Safety
 **Goal**: Claude can modify activity data through P6 GUI with comprehensive validation and rollback capability
@@ -117,7 +119,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Connection & Navigation Foundation | 0/TBD | Not started | - |
+| 1. Connection & Navigation Foundation | 0/3 | Planned | - |
 | 2. Activity Editing with Safety | 0/TBD | Not started | - |
 | 3. Scheduling Operations | 0/TBD | Not started | - |
 | 4. Import & Export | 0/TBD | Not started | - |
