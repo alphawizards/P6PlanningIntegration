@@ -43,6 +43,7 @@ from .agent import (
     ActionType,
     ActionResult
 )
+from .state import P6StateTracker
 from .exceptions import (
     P6AutomationError,
     P6NotFoundError,
@@ -55,7 +56,8 @@ from .exceptions import (
     P6PrintError,
     P6ExportError,
     P6ScheduleError,
-    P6SafeModeError
+    P6SafeModeError,
+    P6UnexpectedDialogError
 )
 
 __all__ = [
@@ -73,6 +75,7 @@ __all__ = [
     'P6ActivityManager',
     'P6BatchProcessor',
     'P6AgentInterface',
+    'P6StateTracker',
     # Enums & Data Classes
     'PageOrientation',
     'PageSize',
@@ -100,5 +103,6 @@ __all__ = [
     'P6PrintError',
     'P6ExportError',
     'P6ScheduleError',
-    'P6SafeModeError'
+    'P6SafeModeError',
+    'P6UnexpectedDialogError'
 ]
