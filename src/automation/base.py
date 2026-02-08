@@ -6,7 +6,6 @@ Provides core connection, window management, and shared functionality
 for all P6 automation operations.
 """
 
-import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -21,7 +20,6 @@ except ImportError:
     PYWINAUTO_AVAILABLE = False
 
 from src.config import (
-    P6_EXECUTABLE_PATH,
     P6_DEFAULT_LAYOUT,
     PDF_PRINTER_NAME,
     PDF_OUTPUT_DIR,
@@ -33,7 +31,8 @@ from .exceptions import (
     P6NotFoundError,
     P6ConnectionError,
     P6TimeoutError,
-    P6SafeModeError
+    P6SafeModeError,
+    P6UnexpectedDialogError
 )
 from .utils import (
     retry,
@@ -78,15 +77,16 @@ class P6AutomationBase:
     
     def __init__(
         self,
-        p6_path: Optional[str] = None,
         safe_mode: Optional[bool] = None,
         auto_connect: bool = False
     ):
         """
         Initialize P6 Automation base.
-        
+
+        P6 must already be running and logged in. This class connects
+        to the existing instance — it never starts P6.
+
         Args:
-            p6_path: Path to P6 executable (PM.exe)
             safe_mode: Override safe mode setting
             auto_connect: Automatically connect on init
         """
@@ -95,22 +95,20 @@ class P6AutomationBase:
                 "pywinauto is required for P6 GUI automation. "
                 "Install with: pip install pywinauto"
             )
-        
-        self.p6_path = Path(p6_path or P6_EXECUTABLE_PATH)
+
         self.safe_mode = safe_mode if safe_mode is not None else SAFE_MODE
-        
+
         self._app: Optional[Application] = None
         self._main_window = None
         self._connected = False
         self._connection_time: Optional[datetime] = None
-        
+
         # Configure pywinauto timing
         Timings.Fast()
-        
+
         logger.info(f"P6AutomationBase initialized")
-        logger.debug(f"  P6 Path: {self.p6_path}")
         logger.debug(f"  Safe Mode: {self.safe_mode}")
-        
+
         if auto_connect:
             self.connect()
     
@@ -119,16 +117,16 @@ class P6AutomationBase:
     # =========================================================================
     
     @retry(max_attempts=3, delay=2.0, exceptions=(P6ConnectionError,))
-    def connect(self, start_if_not_running: bool = False) -> bool:
+    def connect(self) -> bool:
         """
-        Connect to P6 Professional.
-        
-        Args:
-            start_if_not_running: Start P6 if not already running
-            
+        Connect to an already-running P6 Professional instance.
+
+        P6 must be running and logged in before calling this method.
+        This method will never attempt to start P6.
+
         Returns:
             True if connected successfully
-            
+
         Raises:
             P6NotFoundError: If P6 is not running
             P6ConnectionError: If connection fails (after retries)
@@ -136,11 +134,11 @@ class P6AutomationBase:
         if self._connected:
             logger.debug("Already connected to P6")
             return True
-        
+
         logger.info("Connecting to P6 Professional...")
-        
+
         try:
-            # Try to connect to existing instance
+            # Connect to existing P6 instance
             self._app = Application(backend="uia").connect(
                 title_re=f".*{self.P6_TITLE_PATTERN}.*",
                 timeout=5
@@ -149,53 +147,22 @@ class P6AutomationBase:
                 title_re=f".*{self.P6_TITLE_PATTERN}.*"
             )
             self._main_window.wait('ready', timeout=self.WINDOW_TIMEOUT)
-            
+
             self._connected = True
             self._connection_time = datetime.now()
-            
+
             window_title = self._main_window.window_text()
-            logger.info(f"✓ Connected to P6: {window_title}")
+            logger.info(f"Connected to P6: {window_title}")
             return True
-            
+
         except ElementNotFoundError:
-            if start_if_not_running:
-                return self._start_p6()
-            else:
-                raise P6NotFoundError(
-                    f"P6 Professional is not running. "
-                    f"Please start P6 and log in, or set start_if_not_running=True"
-                )
+            raise P6NotFoundError(
+                "P6 Professional is not running. "
+                "Please start P6 and log in first."
+            )
         except Exception as e:
             raise P6ConnectionError(f"Failed to connect to P6: {e}")
-    
-    def _start_p6(self) -> bool:
-        """Start P6 Professional application."""
-        if not self.p6_path.exists():
-            raise P6NotFoundError(f"P6 executable not found: {self.p6_path}")
-        
-        logger.info(f"Starting P6 from: {self.p6_path}")
-        
-        try:
-            self._app = Application(backend="uia").start(str(self.p6_path))
-            
-            # Wait for main window
-            logger.info("Waiting for P6 to start...")
-            time.sleep(5)  # Initial startup delay
-            
-            self._main_window = self._app.window(
-                title_re=f".*{self.P6_TITLE_PATTERN}.*"
-            )
-            self._main_window.wait('ready', timeout=self.CONNECT_TIMEOUT)
-            
-            self._connected = True
-            self._connection_time = datetime.now()
-            
-            logger.info(f"✓ P6 started successfully")
-            return True
-            
-        except Exception as e:
-            raise P6ConnectionError(f"Failed to start P6: {e}")
-    
+
     def disconnect(self):
         """Disconnect from P6 (does not close P6)."""
         self._app = None
@@ -347,7 +314,35 @@ class P6AutomationBase:
         except Exception as e:
             logger.warning(f"Failed to capture error screenshot: {e}")
         return None
-    
+
+    def detect_unexpected_dialog(self) -> Optional[str]:
+        """
+        Check for unexpected modal dialogs and return their text.
+
+        Returns:
+            Dialog text if unexpected dialog found, None otherwise.
+        """
+        try:
+            from pywinauto import Desktop
+            active = Desktop(backend="uia").active_window()
+            active_title = active.window_text()
+
+            # If active window is not P6 main window, it might be a dialog
+            main_title = self._main_window.window_text() if self._main_window else ""
+            if active_title and active_title != main_title:
+                # Read dialog text
+                try:
+                    static_texts = active.children(control_type="Text")
+                    dialog_text = " ".join(
+                        t.window_text() for t in static_texts if t.window_text()
+                    )
+                    return f"Unexpected dialog: '{active_title}' - {dialog_text}"
+                except Exception:
+                    return f"Unexpected dialog: '{active_title}'"
+        except Exception:
+            pass
+        return None
+
     # =========================================================================
     # Context Manager
     # =========================================================================
@@ -374,7 +369,6 @@ class P6AutomationBase:
         return {
             'connected': self.is_connected(),
             'connection_time': self._connection_time.isoformat() if self._connection_time else None,
-            'p6_path': str(self.p6_path),
             'safe_mode': self.safe_mode,
             'window_title': self.get_window_title() if self.is_connected() else None
         }
