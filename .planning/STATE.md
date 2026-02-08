@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 1 of 6 (Connection & Navigation Foundation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-08 — Completed 01-01-PLAN.md (connection foundation simplification)
+Last activity: 2026-02-08 — Completed 01-02-PLAN.md (project navigation refinement)
 
-Progress: [█░░░░░░░░░] ~5%
+Progress: [██░░░░░░░░] ~10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
+- Total plans completed: 2
 - Average duration: ~5 min
-- Total execution time: ~0.1 hours
+- Total execution time: ~0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 1/3 | ~5 min | ~5 min |
+| 01 | 2/3 | ~10 min | ~5 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (~5 min)
-- Trend: Starting
+- Last 5 plans: 01-01 (~5 min), 01-02 (~5 min)
+- Trend: Consistent
 
 *Updated after each plan completion*
 
@@ -49,6 +49,10 @@ Recent decisions affecting current work:
 - 01-01-D1: Remove all P6 launching code; P6 is always already running
 - 01-01-D2: Replace safe_click retry loop with immediate_click (single attempt); user requires immediate failure
 - 01-01-D3: Keep safe_click/safe_type as deprecated aliases for backward compatibility
+- 01-02-D1: Shift+F10 context menu instead of Enter key for opening projects
+- 01-02-D2: Ctrl+F is sole project search method, no tree.get_item fallback
+- 01-02-D3: Separate save prompt and close confirmation handlers (P6 shows both sequentially)
+- 01-02-D4: Errors raise immediately on close failures, no silent swallowing
 
 ### Pending Todos
 
@@ -61,5 +65,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed 01-01-PLAN.md
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
