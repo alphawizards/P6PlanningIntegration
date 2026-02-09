@@ -393,6 +393,49 @@ class P6ExportManager:
             description=f"Export: {output_path.name}"
         )
     
+    def backup_to_xer(self, output_path) -> Path:
+        """
+        Export current project to XER for backup purposes.
+
+        Unlike export_to_xer which uses self.output_dir, this method
+        writes directly to the user-specified path.
+
+        Backup is on-demand only (per user decision). Claude does NOT
+        automatically backup before edits -- user must explicitly request.
+
+        Args:
+            output_path: Full path (str or Path) for the XER backup file
+
+        Returns:
+            Path to the created XER backup file
+
+        Raises:
+            P6ExportError: If backup fails
+        """
+        output_path = Path(output_path).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Add .xer extension if missing
+        if not output_path.suffix.lower() == '.xer':
+            output_path = output_path.with_suffix('.xer')
+
+        logger.info(f"Creating XER backup: {output_path}")
+
+        original_output_dir = self.output_dir
+        try:
+            self.output_dir = output_path.parent
+            self.export_to_xer(output_path.name)
+        finally:
+            self.output_dir = original_output_dir
+
+        # Verify file was created
+        if not (output_path.exists() and output_path.stat().st_size > 0):
+            raise P6ExportError(f"Backup file not created or empty: {output_path}")
+
+        file_size_kb = output_path.stat().st_size / 1024
+        logger.info(f"XER backup created: {output_path} ({file_size_kb:.1f} KB)")
+        return output_path
+
     def cancel_export(self) -> bool:
         """Cancel the export wizard."""
         try:
