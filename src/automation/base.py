@@ -15,6 +15,7 @@ try:
     from pywinauto import Application, Desktop
     from pywinauto.findwindows import ElementNotFoundError
     from pywinauto.timings import Timings
+    from pywinauto.timings import TimeoutError as PywinautoTimeoutError
     PYWINAUTO_AVAILABLE = True
 except ImportError:
     PYWINAUTO_AVAILABLE = False
@@ -104,7 +105,7 @@ class P6AutomationBase:
         self._connection_time: Optional[datetime] = None
 
         # Configure pywinauto timing
-        Timings.Fast()
+        Timings.fast()
 
         logger.info(f"P6AutomationBase initialized")
         logger.debug(f"  Safe Mode: {self.safe_mode}")
@@ -155,7 +156,7 @@ class P6AutomationBase:
             logger.info(f"Connected to P6: {window_title}")
             return True
 
-        except ElementNotFoundError:
+        except (ElementNotFoundError, PywinautoTimeoutError):
             raise P6NotFoundError(
                 "P6 Professional is not running. "
                 "Please start P6 and log in first."

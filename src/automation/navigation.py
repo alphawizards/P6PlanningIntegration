@@ -15,8 +15,7 @@ import re
 from typing import Optional, Dict, List
 
 try:
-    from pywinauto import Application, Desktop
-    from pywinauto.findwindows import ElementNotFoundError
+    from pywinauto import Desktop
     PYWINAUTO_AVAILABLE = True
 except ImportError:
     PYWINAUTO_AVAILABLE = False
@@ -365,17 +364,20 @@ class P6Navigator:
         """
         title = self.get_window_title()
 
-        # Try to extract project name from title
-        # Pattern: "Primavera P6 ... - [Project Name]"
+        # Pattern 1: "Primavera P6 Professional 20 : ProjectID (Description)"
+        match = re.search(r':\s*(\S+)\s*\(', title)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern 2: "Primavera P6 ... - [Project Name]"
         match = re.search(r'-\s*\[?([^\[\]]+)\]?\s*$', title)
         if match:
             return match.group(1).strip()
 
-        # Alternative: anything after the dash
-        if ' - ' in title:
-            parts = title.split(' - ')
-            if len(parts) > 1:
-                return parts[-1].strip()
+        # Pattern 3: anything after colon or dash
+        for sep in [' : ', ' - ']:
+            if sep in title:
+                return title.split(sep, 1)[1].strip()
 
         return None
 

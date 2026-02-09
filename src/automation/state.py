@@ -90,7 +90,15 @@ class P6StateTracker:
         try:
             title = self._window.window_text()
 
-            # Pattern: anything after " - " at end of title
+            # Pattern 1: "Primavera P6 Professional 20 : ProjectID (Description)"
+            match = re.search(r':\s*(\S+)\s*\(', title)
+            if match:
+                project = match.group(1).strip()
+                self._cached_project = project
+                self._last_refresh = datetime.now()
+                return project
+
+            # Pattern 2: "Primavera P6 ... - [ProjectName]"
             match = re.search(r'-\s*\[?([^\[\]-]+)\]?\s*$', title)
             if match:
                 project = match.group(1).strip()
@@ -98,15 +106,14 @@ class P6StateTracker:
                 self._last_refresh = datetime.now()
                 return project
 
-            # Alternative: split on " - "
-            if ' - ' in title:
-                parts = title.split(' - ')
-                if len(parts) > 1:
-                    project = parts[-1].strip()
-                    if project and "Primavera" not in project and "P6" not in project:
-                        self._cached_project = project
+            # Pattern 3: anything after colon or dash separator
+            for sep in [' : ', ' - ']:
+                if sep in title:
+                    remainder = title.split(sep, 1)[1].strip()
+                    if remainder and "Primavera" not in remainder and "P6" not in remainder:
+                        self._cached_project = remainder
                         self._last_refresh = datetime.now()
-                        return project
+                        return remainder
 
             # No project detected
             self._cached_project = None
