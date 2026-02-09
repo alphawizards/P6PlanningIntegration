@@ -32,6 +32,7 @@ from .scheduling import (
     ScheduleOption
 )
 from .activities import P6ActivityManager
+from .activity_editor import P6ActivityEditor
 from .batch import (
     P6BatchProcessor,
     BatchStatus,
@@ -73,6 +74,7 @@ __all__ = [
     'P6ScheduleManager',
     'P6BaselineManager',
     'P6ActivityManager',
+    'P6ActivityEditor',
     'P6BatchProcessor',
     'P6AgentInterface',
     'P6StateTracker',
