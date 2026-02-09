@@ -33,6 +33,7 @@ from .scheduling import (
 )
 from .activities import P6ActivityManager
 from .activity_editor import P6ActivityEditor
+from .relationships import P6RelationshipManager
 from .batch import (
     P6BatchProcessor,
     BatchStatus,
@@ -75,6 +76,7 @@ __all__ = [
     'P6BaselineManager',
     'P6ActivityManager',
     'P6ActivityEditor',
+    'P6RelationshipManager',
     'P6BatchProcessor',
     'P6AgentInterface',
     'P6StateTracker',
