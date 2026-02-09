@@ -44,12 +44,12 @@ Plans:
 **Depends on**: Phase 1 (requires navigation to open projects)
 **Requirements**: EDIT-01, EDIT-02, EDIT-03, EDIT-04, EDIT-05, EDIT-06, EDIT-07, SAFE-01, SAFE-02
 **Success Criteria** (what must be TRUE):
-  1. Claude exports an XER backup before making any edits
+  1. Claude exports an XER backup when explicitly requested by user to a user-specified path
   2. Claude edits activity start dates, finish dates, and durations through the P6 GUI activity table
   3. Claude adds, removes, and modifies predecessor/successor relationships (FS, SS, FF, SF with lag)
   4. Claude creates new activities in the P6 activity table with valid properties
   5. Claude locates specific activities by Activity ID in the current project
-  6. If any edit fails or produces invalid schedule state, Claude restores the backup XER automatically
+  6. If any edit fails, Claude stops immediately and reports the failure to the user (no automatic rollback)
 **Plans**: 4 plans
 
 Plans:
