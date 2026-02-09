@@ -50,10 +50,13 @@ Plans:
   4. Claude creates new activities in the P6 activity table with valid properties
   5. Claude locates specific activities by Activity ID in the current project
   6. If any edit fails or produces invalid schedule state, Claude restores the backup XER automatically
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] TBD during planning
+- [ ] 02-01-PLAN.md -- Activity editor: date/duration editing via Details Form with verification
+- [ ] 02-02-PLAN.md -- Relationship management: add/remove predecessors via Assign dialog
+- [ ] 02-03-PLAN.md -- Activity creation with WBS + XER backup capability
+- [ ] 02-04-PLAN.md -- Package integration + live P6 verification checkpoint
 
 ### Phase 3: Scheduling Operations
 **Goal**: Claude can run the scheduler, analyze results, validate constraints, and report critical path
@@ -120,7 +123,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Connection & Navigation Foundation | 0/3 | Planned | - |
-| 2. Activity Editing with Safety | 0/TBD | Not started | - |
+| 2. Activity Editing with Safety | 0/4 | Planned | - |
 | 3. Scheduling Operations | 0/TBD | Not started | - |
 | 4. Import & Export | 0/TBD | Not started | - |
 | 5. Layouts & Filters | 0/TBD | Not started | - |
