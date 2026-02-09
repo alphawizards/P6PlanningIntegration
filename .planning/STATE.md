@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** A planner can sit in Claude Code and operate P6 Professional through conversation — open projects, edit activities, change logic, import files, export schedules, and print PDFs — without touching the P6 interface themselves.
-**Current focus:** Phase 1 - Connection & Navigation Foundation
+**Current focus:** Phase 1 COMPLETE. Ready for Phase 2 - Activity Editing with Safety
 
 ## Current Position
 
-Phase: 1 of 6 (Connection & Navigation Foundation)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-08 — Completed 01-02-PLAN.md (project navigation refinement)
+Phase: 1 of 6 (Connection & Navigation Foundation) — COMPLETED
+Plan: 3 of 3 in current phase — ALL DONE
+Status: Phase 1 verified against live P6 Professional 20
+Last activity: 2026-02-09 — Completed 01-03 with live P6 verification
 
-Progress: [██░░░░░░░░] ~10%
+Progress: [██░░░░░░░░] ~17%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: ~5 min
-- Total execution time: ~0.2 hours
+- Total plans completed: 3
+- Average duration: ~8 min
+- Total execution time: ~0.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 2/3 | ~10 min | ~5 min |
+| 01 | 3/3 | ~25 min | ~8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (~5 min), 01-02 (~5 min)
-- Trend: Consistent
+- Last 5 plans: 01-01 (~5 min), 01-02 (~5 min), 01-03 (~15 min)
+- Trend: 01-03 longer due to live P6 verification + bug fixes
 
 *Updated after each plan completion*
 
@@ -53,6 +53,12 @@ Recent decisions affecting current work:
 - 01-02-D2: Ctrl+F is sole project search method, no tree.get_item fallback
 - 01-02-D3: Separate save prompt and close confirmation handlers (P6 shows both sequentially)
 - 01-02-D4: Errors raise immediately on close failures, no silent swallowing
+- 01-03-D1: P6 20 title format uses `: ProjectID (Description)` — added colon-based regex pattern
+- 01-03-D2: Catch PywinautoTimeoutError alongside ElementNotFoundError in connect()
+
+### Known Limitations
+
+- View detection returns "Unknown" in P6 20 (Java Swing tab state not exposed via UIA). Non-blocking; will refine in Phase 2 if needed.
 
 ### Pending Todos
 
@@ -64,6 +70,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-08
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-02-09
+Stopped at: Phase 1 complete, verified against live P6
 Resume file: None
+Next action: /gsd:plan-phase 2

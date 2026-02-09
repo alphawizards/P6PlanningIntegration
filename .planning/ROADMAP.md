@@ -12,7 +12,7 @@ This roadmap transforms P6 Professional from a complex desktop application requi
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Connection & Navigation Foundation** - Detect P6, navigate EPS, open projects, track state
+- [x] **Phase 1: Connection & Navigation Foundation** - Detect P6, navigate EPS, open projects, track state
 - [ ] **Phase 2: Activity Editing with Safety** - Edit dates/durations/logic with validation and rollback
 - [ ] **Phase 3: Scheduling Operations** - Run scheduler, read logic, validate constraints, analyze critical path
 - [ ] **Phase 4: Import & Export** - Import XER/XML, export schedules, print PDFs with custom naming
@@ -35,9 +35,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- Refine connection foundation and error handling (no-retry, dialog detection)
-- [ ] 01-02-PLAN.md -- Right-click project open, close confirmation, Ctrl+F navigation
-- [ ] 01-03-PLAN.md -- State tracker, package integration, human verification against real P6
+- [x] 01-01-PLAN.md -- Refine connection foundation and error handling (no-retry, dialog detection)
+- [x] 01-02-PLAN.md -- Right-click project open, close confirmation, Ctrl+F navigation
+- [x] 01-03-PLAN.md -- State tracker, package integration, human verification against real P6
 
 ### Phase 2: Activity Editing with Safety
 **Goal**: Claude can modify activity data through P6 GUI with comprehensive validation and rollback capability
