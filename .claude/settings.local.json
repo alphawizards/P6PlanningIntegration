@@ -5,17 +5,17 @@
       "Bash(git commit:*)",
       "Bash(cd:*)",
       "Bash(git push:*)",
-      "Skill(gsd:map-codebase)",
-      "Skill(gsd:map-codebase:*)",
       "Bash(wc:*)",
-      "Bash(for f in .planning/research/*.md)",
-      "Bash(done)",
       "Bash(python:*)",
       "Bash(pip install:*)",
-      "Bash(if not exist \"C:\\\\temp\" mkdir \"C:\\\\temp\")",
       "Bash(pip show:*)",
+      "Bash(dir:*)",
+      "Skill(gsd:map-codebase)",
+      "Skill(gsd:map-codebase:*)",
       "Skill(gsd:plan-phase)",
-      "Skill(gsd:plan-phase:*)"
+      "Skill(gsd:plan-phase:*)",
+      "Skill(xlsx)",
+      "Skill(xlsx:*)"
     ]
   }
 }

@@ -1,0 +1,59 @@
+# P6 Voice-Driven GUI Agent - Dependencies
+# Per tasks.md Phase 4: Voice Integration (Whisper)
+
+# =============================================================================
+# GUI Automation (Layer 3: "The Hands")
+# =============================================================================
+pywinauto>=0.6.8          # Windows GUI automation
+pyautogui>=0.9.54         # Fallback mouse/keyboard control
+psutil>=5.9.0             # Process detection
+
+# =============================================================================
+# Voice Input (Layer 3: "The Ears")
+# =============================================================================
+openai-whisper>=20231117  # Local Whisper for speech-to-text
+pyaudio>=0.2.14           # Microphone audio capture
+soundfile>=0.12.1         # Audio file handling
+numpy>=1.24.0             # Audio processing
+
+# =============================================================================
+# GUI Interface (Tkinter is built-in, but these enhance it)
+# =============================================================================
+# tkinter is included with Python, no install needed
+
+# =============================================================================
+# AI/LLM Integration (Optional - for full agent capabilities)
+# =============================================================================
+anthropic>=0.18.0         # Claude API (if using Anthropic)
+openai>=1.12.0            # OpenAI API (if using GPT)
+
+# =============================================================================
+# Utilities
+# =============================================================================
+python-dotenv>=1.0.0      # Environment variable management
+
+# =============================================================================
+# NOTES
+# =============================================================================
+#
+# FFmpeg Requirement:
+# Whisper requires ffmpeg to be installed on your system.
+#
+# Windows:
+#   1. Download from https://ffmpeg.org/download.html
+#   2. Or use: winget install ffmpeg
+#   3. Or use: choco install ffmpeg
+#
+# macOS:
+#   brew install ffmpeg
+#
+# Linux:
+#   sudo apt install ffmpeg
+#
+# PyAudio on Windows:
+# If pip install pyaudio fails, try:
+#   pip install pipwin
+#   pipwin install pyaudio
+#
+# Or download wheel from:
+#   https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
