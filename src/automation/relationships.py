@@ -2,66 +2,88 @@
 """
 P6 Relationship Manager Module.
 
-Provides relationship (predecessor/successor) management:
-- Add predecessor relationships
+Manages activity predecessor/successor relationships via the P6 Details
+Form Relationships tab using the win32 backend with Delphi VCL message
+protocol for direct control manipulation.
+
+Capabilities:
+- Read existing relationships from the Relationships tab grid
+- Add predecessor relationships (with type and lag editing)
 - Remove predecessor relationships
 - Add successor relationships (convenience wrapper)
-- Relationship type and lag editing
+
+Uses the win32 backend exclusively. The UIA backend is unusable on
+P6 Professional 20 (15-90s per operation). All control interaction
+uses :class:`P6VCLBase` infrastructure: ``children()``,
+``friendly_class_name()``, ``_edit_control_value()``, and
+``_handle_confirmation_dialog()``.
+
+P6 Professional 20 Relationships tab layout (verified):
+  Grid (TCVirtualQueryGrid) showing:
+    Predecessor | Activity Name | Relationship Type | Lag | ...
+  Buttons below or beside the grid:
+    Assign | Remove
 """
 
-import time
-import re
-from typing import Optional
+from __future__ import annotations
 
-try:
-    from pywinauto import Desktop
-    PYWINAUTO_AVAILABLE = True
-except ImportError:
-    PYWINAUTO_AVAILABLE = False
+import ctypes
+import re
+import time
 
 from src.utils import logger
-from .exceptions import P6SafeModeError
-from .utils import immediate_click, immediate_type
+from .exceptions import P6SafeModeError, P6EditError
+from .vcl_base import P6VCLBase, WM_KEYDOWN, VK_RETURN
 
 
-class P6RelationshipManager:
-    """
-    Manages P6 activity relationships (predecessors/successors).
+class P6RelationshipManager(P6VCLBase):
+    """Manage P6 activity relationships via the Details Form Relationships tab.
 
-    Provides:
-    - Adding predecessor relationships with type and lag
-    - Removing predecessor relationships
-    - Adding successor relationships (convenience method)
+    Inherits win32/VCL infrastructure from :class:`P6VCLBase` and adds
+    relationship-specific grid discovery, reading, and editing.
+
+    Requires a :class:`P6ActivityManager` instance for activity selection.
+    All write operations require ``safe_mode=False``.
 
     Warning:
         This class is NOT thread-safe.
-        All operations require safe_mode=False.
+        P6 must be open with an activity view showing the Details Form.
     """
 
-    # Timing
-    DIALOG_TIMEOUT = 10
-    ACTION_DELAY = 0.3
-
     # Valid relationship types in P6
-    VALID_REL_TYPES = ("FS", "SS", "FF", "SF")
+    VALID_REL_TYPES: tuple[str, ...] = ("FS", "SS", "FF", "SF")
 
-    def __init__(self, main_window, activity_manager, safe_mode: bool = True):
-        """
-        Initialize relationship manager.
+    # Grid column patterns for parsing relationship text
+    _REL_TYPE_PATTERN = re.compile(r'\b(FS|SS|FF|SF)\b')
+
+    def __init__(
+        self,
+        main_window: object,
+        activity_manager: object,
+        safe_mode: bool = True,
+    ) -> None:
+        """Initialize relationship manager.
 
         Args:
-            main_window: P6 main window wrapper
-            activity_manager: P6ActivityManager instance for activity selection
-            safe_mode: Prevent destructive operations (default True)
+            main_window: P6 main window wrapper (UIA or win32).
+            activity_manager: P6ActivityManager instance for select_activity.
+            safe_mode: Prevent destructive operations (default True).
         """
-        self._window = main_window
-        self._activity_manager = activity_manager
-        self.safe_mode = safe_mode
+        super().__init__(main_window)
+        self._activity_manager: object = activity_manager
+        self.safe_mode: bool = safe_mode
 
-        logger.debug(f"P6RelationshipManager initialized (safe_mode={safe_mode})")
+        logger.debug("P6RelationshipManager initialized (safe_mode=%s)", safe_mode)
 
-    def _check_safe_mode(self, operation: str):
-        """Check if operation is blocked by safe mode."""
+    def _check_safe_mode(self, operation: str) -> None:
+        """Check if operation is blocked by safe mode.
+
+        Args:
+            operation: Human-readable name of the blocked operation.
+
+        Raises:
+            P6SafeModeError: If safe mode is enabled.
+        """
         if self.safe_mode:
             raise P6SafeModeError(
                 f"'{operation}' blocked by SAFE_MODE. "
@@ -69,67 +91,206 @@ class P6RelationshipManager:
             )
 
     # =========================================================================
-    # Helper Methods
+    # Tab & Control Discovery
     # =========================================================================
 
-    def _get_details_pane(self):
-        """
-        Locate the Details Form pane at the bottom of the P6 window.
+    def _select_relationships_tab(self) -> bool:
+        """Select the Relationships tab in the Details Form.
+
+        Delegates to :meth:`P6VCLBase._select_details_tab` with
+        ``tab_name="Relationships"``.
 
         Returns:
-            Details pane control wrapper
-
-        Raises:
-            Exception if details pane not found
+            ``True`` if the tab was found and clicked, ``False`` otherwise.
         """
-        # The Details Form is typically a pane/panel at the bottom of the
-        # main P6 window. Try common identifiers.
-        details = self._window.child_window(
-            title_re=".*Detail.*",
-            control_type="Pane"
-        )
-        if details.exists(timeout=5):
-            return details
+        return self._select_details_tab("Relationships")
 
-        # Fallback: look for a tab control that contains relationship tabs
-        tab_control = self._window.child_window(
-            control_type="Tab",
-            found_index=1  # Second tab control (first is usually the main view tabs)
-        )
-        if tab_control.exists(timeout=5):
-            return tab_control.parent()
+    def _find_relationship_grid(self) -> object | None:
+        """Find the TCVirtualQueryGrid on the Relationships tab.
 
-        raise Exception("Details pane not found in P6 window")
+        The Relationships tab contains a grid control (Delphi
+        ``TCVirtualQueryGrid``) that displays predecessor/successor
+        relationships for the selected activity.
 
-    def _select_details_tab(self, tab_name: str):
+        Returns:
+            The grid control wrapper, or ``None`` if not found.
         """
-        Select a tab in the Details Form pane.
+        self._ensure_win32()
+        children = self._win32_window.children()
+
+        for child in children:
+            try:
+                class_name: str = child.friendly_class_name()
+                if 'Grid' in class_name or 'VirtualQuery' in class_name:
+                    logger.debug(
+                        "Found relationship grid: %s", class_name
+                    )
+                    return child
+            except Exception:
+                pass
+
+        # Fallback: look for the actual Delphi class name
+        for child in children:
+            try:
+                raw_class: str = child.class_name()
+                if 'TCVirtualQueryGrid' in raw_class:
+                    logger.debug(
+                        "Found relationship grid (raw class): %s", raw_class
+                    )
+                    return child
+            except Exception:
+                pass
+
+        logger.warning("Relationship grid not found on Relationships tab")
+        return None
+
+    def _find_button(self, button_text: str) -> object | None:
+        """Find a button control by text in the main window's children.
+
+        Searches for a Button-class child whose ``window_text()``
+        contains *button_text* (case-insensitive).
 
         Args:
-            tab_name: Name of the tab to select (e.g., "Relationships")
+            button_text: Text to search for (e.g. ``"Assign"``, ``"Remove"``).
+
+        Returns:
+            The button control wrapper, or ``None`` if not found.
         """
-        details_pane = self._get_details_pane()
+        self._ensure_win32()
+        children = self._win32_window.children()
+        button_lower: str = button_text.lower()
 
-        # Find and click the tab
-        tab_item = details_pane.child_window(
-            title_re=f".*{tab_name}.*",
-            control_type="TabItem"
-        )
-        if tab_item.exists(timeout=5):
-            immediate_click(tab_item)
-            time.sleep(self.ACTION_DELAY)
-            logger.debug(f"Selected details tab: {tab_name}")
-            return
+        for child in children:
+            try:
+                if child.friendly_class_name() == 'Button':
+                    text: str = child.window_text()
+                    if button_lower in text.lower():
+                        return child
+            except Exception:
+                pass
 
-        # Fallback: try clicking text that matches
-        tab_text = details_pane.child_window(title_re=f".*{tab_name}.*")
-        if tab_text.exists(timeout=5):
-            immediate_click(tab_text)
-            time.sleep(self.ACTION_DELAY)
-            logger.debug(f"Selected details tab (fallback): {tab_name}")
-            return
+        return None
 
-        raise Exception(f"Details tab '{tab_name}' not found")
+    # =========================================================================
+    # Read Relationships
+    # =========================================================================
+
+    def read_relationships(self, activity_id: str) -> list[dict[str, str]]:
+        """Read current relationships for an activity from the Relationships tab.
+
+        Selects the activity, switches to the Relationships tab, and reads
+        the grid contents. Each row in the grid represents one relationship.
+
+        Args:
+            activity_id: Activity ID to read relationships for.
+
+        Returns:
+            List of dicts with keys: ``'activity_id'``, ``'activity_name'``,
+            ``'rel_type'``, ``'lag'``, ``'direction'`` (``'predecessor'``
+            or ``'successor'``). Returns empty list on failure.
+        """
+        try:
+            if not self._activity_manager.select_activity(activity_id):
+                logger.error("Could not select activity: %s", activity_id)
+                return []
+
+            self._select_relationships_tab()
+            grid = self._find_relationship_grid()
+            if grid is None:
+                return []
+
+            relationships: list[dict[str, str]] = []
+
+            # Read grid children — each row may be a child control or
+            # the grid may expose text via children
+            try:
+                grid_children = grid.children()
+                for child in grid_children:
+                    try:
+                        text: str = child.window_text().strip()
+                        if not text:
+                            continue
+
+                        row_data: dict[str, str] = self._parse_grid_row(text)
+                        if row_data:
+                            relationships.append(row_data)
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.debug("Could not read grid children: %s", e)
+
+            # Fallback: read grid text directly
+            if not relationships:
+                try:
+                    grid_text: str = grid.window_text().strip()
+                    if grid_text:
+                        for line in grid_text.split('\n'):
+                            row_data = self._parse_grid_row(line.strip())
+                            if row_data:
+                                relationships.append(row_data)
+                except Exception as e:
+                    logger.debug("Could not read grid text: %s", e)
+
+            logger.info(
+                "Activity %s has %d relationships",
+                activity_id, len(relationships),
+            )
+            return relationships
+
+        except Exception as e:
+            logger.error(
+                "Failed to read relationships for %s: %s", activity_id, e
+            )
+            return []
+
+    def _parse_grid_row(self, text: str) -> dict[str, str] | None:
+        """Parse a grid row text into a relationship dict.
+
+        Attempts to extract activity ID, name, relationship type, and lag
+        from a single row of grid text. The exact format depends on P6's
+        grid rendering.
+
+        Args:
+            text: Raw text from a grid row.
+
+        Returns:
+            Dict with relationship data, or ``None`` if not parseable.
+        """
+        if not text:
+            return None
+
+        # Try to find a relationship type in the text
+        rel_match = self._REL_TYPE_PATTERN.search(text)
+
+        # Split on common delimiters (tab, multiple spaces)
+        parts: list[str] = re.split(r'\t+|\s{2,}', text)
+        parts = [p.strip() for p in parts if p.strip()]
+
+        if len(parts) < 2:
+            return None
+
+        # Determine direction from text context
+        text_lower: str = text.lower()
+        if 'successor' in text_lower:
+            direction = 'successor'
+        else:
+            direction = 'predecessor'
+
+        result: dict[str, str] = {
+            'activity_id': parts[0],
+            'activity_name': parts[1] if len(parts) > 1 else '',
+            'rel_type': rel_match.group(1) if rel_match else 'FS',
+            'lag': '',
+            'direction': direction,
+        }
+
+        # Try to extract lag from remaining parts
+        for part in parts[2:]:
+            if re.match(r'^-?\d+(\.\d+)?d?$', part):
+                result['lag'] = part.rstrip('d')
+                break
+
+        return result
 
     # =========================================================================
     # Add Predecessor
@@ -140,27 +301,30 @@ class P6RelationshipManager:
         activity_id: str,
         predecessor_id: str,
         rel_type: str = "FS",
-        lag: int = 0
+        lag: int = 0,
     ) -> bool:
-        """
-        Add a predecessor relationship to an activity.
+        """Add a predecessor relationship to an activity.
+
+        Selects the target activity, switches to the Relationships tab,
+        clicks the Assign button, searches for the predecessor in the
+        Assign dialog, confirms the assignment, and optionally edits the
+        relationship type and lag.
 
         Args:
-            activity_id: Target activity ID (the successor)
-            predecessor_id: Predecessor activity ID to add
-            rel_type: Relationship type - FS, SS, FF, or SF (default "FS")
-            lag: Lag value in days (default 0)
+            activity_id: Target activity ID (the successor).
+            predecessor_id: Predecessor activity ID to add.
+            rel_type: Relationship type — FS, SS, FF, or SF (default "FS").
+            lag: Lag value in days (default 0).
 
         Returns:
-            True if relationship added successfully
+            ``True`` if relationship added successfully, ``False`` otherwise.
 
         Raises:
-            P6SafeModeError: If safe_mode is True
-            ValueError: If rel_type is not valid
+            P6SafeModeError: If safe_mode is True.
+            ValueError: If rel_type is not valid.
         """
         self._check_safe_mode("Add Predecessor")
 
-        # Validate relationship type
         if rel_type not in self.VALID_REL_TYPES:
             raise ValueError(
                 f"Invalid relationship type '{rel_type}'. "
@@ -168,218 +332,248 @@ class P6RelationshipManager:
             )
 
         logger.info(
-            f"Adding predecessor: {predecessor_id} -> {activity_id} "
-            f"({rel_type}, lag={lag})"
+            "Adding predecessor: %s -> %s (%s, lag=%d)",
+            predecessor_id, activity_id, rel_type, lag,
         )
 
         try:
             # Select the target activity
             if not self._activity_manager.select_activity(activity_id):
-                logger.error(f"Could not select activity: {activity_id}")
+                logger.error("Could not select activity: %s", activity_id)
                 return False
 
-            # Switch to Relationships tab in Details Form
-            self._select_details_tab("Relationships")
+            # Switch to Relationships tab
+            self._select_relationships_tab()
 
-            # Get the details pane for button access
-            details_pane = self._get_details_pane()
-
-            # Click "Assign" button to open assignment dialog
-            assign_button = details_pane.child_window(
-                title="Assign", control_type="Button"
-            )
-            immediate_click(assign_button)
-            time.sleep(self.ACTION_DELAY)
-
-            # Wait for the Assign dialog
-            assign_dialog = Desktop(backend="uia").window(
-                title_re=".*Assign.*"
-            )
-            assign_dialog.wait("ready", timeout=self.DIALOG_TIMEOUT)
-
-            # Find search edit field
-            search_edit = assign_dialog.child_window(
-                control_type="Edit", found_index=0
-            )
-            immediate_type(search_edit, predecessor_id)
-            time.sleep(self.ACTION_DELAY)
-
-            # Click Search/Find button
-            search_button = assign_dialog.child_window(
-                title_re=".*Search.*|.*Find.*", control_type="Button"
-            )
-            immediate_click(search_button)
-            time.sleep(self.ACTION_DELAY)
-
-            # Select the result (first item in list or the found activity)
-            try:
-                result_list = assign_dialog.child_window(
-                    control_type="List"
+            # Find and click the Assign button
+            assign_btn = self._find_button("Assign")
+            if assign_btn is None:
+                raise P6EditError(
+                    "Assign button not found on Relationships tab"
                 )
-                if result_list.exists(timeout=3):
-                    first_item = result_list.child_window(
-                        control_type="ListItem", found_index=0
-                    )
-                    immediate_click(first_item)
-                    time.sleep(self.ACTION_DELAY)
-            except Exception:
-                # Result may already be selected or use different control
-                logger.debug("Could not click list item; proceeding with assignment")
 
-            # Click Assign/OK button to confirm
-            confirm_button = assign_dialog.child_window(
-                title_re=".*Assign.*|.*OK.*", control_type="Button"
+            assign_btn.click_input()
+            time.sleep(self.COMMIT_DELAY)
+
+            # Handle the Assign dialog
+            if not self._handle_assign_dialog(predecessor_id):
+                logger.error(
+                    "Failed to assign predecessor %s in dialog",
+                    predecessor_id,
+                )
+                self._detach_thread()
+                return False
+
+            # Edit relationship type and lag if non-default
+            if rel_type != "FS" or lag != 0:
+                self._edit_relationship_properties(predecessor_id, rel_type, lag)
+
+            logger.info(
+                "Added relationship: %s -> %s (%s, lag=%d)",
+                predecessor_id, activity_id, rel_type, lag,
             )
-            immediate_click(confirm_button)
-            time.sleep(self.ACTION_DELAY)
+            self._detach_thread()
+            return True
 
-            # Close dialog if still open
+        except (P6SafeModeError, ValueError):
+            raise
+        except Exception as e:
+            self._detach_thread()
+            logger.error("Failed to add predecessor: %s", e)
+            return False
+
+    def _handle_assign_dialog(self, predecessor_id: str) -> bool:
+        """Handle the P6 Assign Predecessors dialog.
+
+        Finds the dialog window via ``find_elements``, locates the search
+        edit field, types the predecessor ID, clicks Search/Assign, then
+        closes the dialog.
+
+        Args:
+            predecessor_id: Activity ID to search for and assign.
+
+        Returns:
+            ``True`` if the dialog was handled successfully.
+        """
+        from pywinauto import Application
+        from pywinauto.findwindows import find_elements
+
+        pid = ctypes.c_ulong()
+        handle: int = self._win32_handle or self._window.handle
+        ctypes.windll.user32.GetWindowThreadProcessId(
+            handle, ctypes.byref(pid)
+        )
+
+        # Wait for the Assign dialog to appear
+        end_time: float = time.time() + self.DIALOG_TIMEOUT
+        dialog_win = None
+
+        while time.time() < end_time:
             try:
-                if assign_dialog.exists(timeout=2):
-                    close_button = assign_dialog.child_window(
-                        title_re=".*Close.*|.*Cancel.*", control_type="Button"
+                elements = find_elements(
+                    process=pid.value,
+                    title_re=".*Assign.*",
+                    backend="win32",
+                    visible_only=True,
+                )
+                if elements:
+                    dialog_handle: int = elements[0].handle
+                    dialog_app = Application(backend="win32").connect(
+                        handle=dialog_handle
                     )
-                    if close_button.exists(timeout=1):
-                        immediate_click(close_button)
-                    else:
-                        assign_dialog.type_keys("{ESC}")
+                    dialog_win = dialog_app.window(handle=dialog_handle)
+                    break
+            except Exception:
+                pass
+            time.sleep(0.2)
+
+        if dialog_win is None:
+            logger.error("Assign dialog did not appear within timeout")
+            return False
+
+        try:
+            dialog_children = dialog_win.children()
+
+            # Find the search Edit control and type the predecessor ID
+            search_edit = None
+            for child in dialog_children:
+                try:
+                    if child.friendly_class_name() in ("Edit", "TCDBEdit"):
+                        search_edit = child
+                        break
+                except Exception:
+                    pass
+
+            if search_edit is not None:
+                search_handle: int = search_edit.handle
+                # Attach to dialog thread for focus
+                self._attach_thread()
+
+                ctypes.windll.user32.SetFocus(search_handle)
+                time.sleep(self.ACTION_DELAY)
+
+                # Select all and type the predecessor ID
+                ctypes.windll.user32.SendMessageW(
+                    search_handle, 0x00B1, 0, -1  # EM_SETSEL
+                )
+                time.sleep(0.1)
+                for ch in predecessor_id:
+                    ctypes.windll.user32.SendMessageW(
+                        search_handle, 0x0102, ord(ch), 0  # WM_CHAR
+                    )
+                    time.sleep(self.CHAR_DELAY)
+                time.sleep(self.ACTION_DELAY)
+
+                # Press Enter to search
+                ctypes.windll.user32.SendMessageW(
+                    search_handle, WM_KEYDOWN, VK_RETURN, 0
+                )
+                time.sleep(self.COMMIT_DELAY)
+            else:
+                logger.warning("Search edit not found in Assign dialog")
+
+            # Find and click the Assign/OK button in the dialog
+            for child in dialog_children:
+                try:
+                    if child.friendly_class_name() == "Button":
+                        btn_text: str = child.window_text().lower()
+                        if "assign" in btn_text or "ok" in btn_text:
+                            child.click()
+                            time.sleep(self.ACTION_DELAY)
+                            break
+                except Exception:
+                    pass
+
+            # Close the dialog if still open
+            time.sleep(self.ACTION_DELAY)
+            try:
+                if dialog_win.is_visible():
+                    for child in dialog_win.children():
+                        try:
+                            if child.friendly_class_name() == "Button":
+                                btn_text = child.window_text().lower()
+                                if "close" in btn_text or "cancel" in btn_text:
+                                    child.click()
+                                    time.sleep(self.ACTION_DELAY)
+                                    break
+                        except Exception:
+                            pass
             except Exception:
                 pass
 
-            # If non-default relationship type or non-zero lag, edit them
-            if rel_type != "FS" or lag != 0:
-                self._edit_relationship_properties(
-                    details_pane, predecessor_id, rel_type, lag
-                )
-
-            logger.info(
-                f"Added relationship: {predecessor_id} -> {activity_id} "
-                f"({rel_type}, lag={lag})"
-            )
             return True
 
-        except P6SafeModeError:
-            raise
-        except ValueError:
-            raise
         except Exception as e:
-            logger.error(f"Failed to add predecessor: {e}")
+            logger.error("Error handling Assign dialog: %s", e)
             return False
 
     def _edit_relationship_properties(
         self,
-        details_pane,
         predecessor_id: str,
         rel_type: str,
-        lag: int
-    ):
-        """
-        Edit relationship type and lag for a newly added relationship.
+        lag: int,
+    ) -> None:
+        """Edit relationship type and lag for a newly added relationship.
 
-        The relationship appears in the Relationships tab grid. This method
-        finds the row and edits the Type and Lag columns.
-
-        Note: The exact mechanism for editing cells in the Relationships tab
-        grid depends on P6's UI controls. This implements the most likely
-        pattern (double-click cell, type value, Enter). If it fails, clear
-        log messages are produced for debugging during live P6 testing.
+        After a relationship is assigned, it appears in the Relationships
+        tab grid with default values (FS, lag=0). This method finds the
+        relevant grid cells and edits them using the VCL protocol.
 
         Args:
-            details_pane: The Details Form pane control
-            predecessor_id: Predecessor ID to locate in the grid
-            rel_type: Relationship type to set
-            lag: Lag value to set
+            predecessor_id: Predecessor ID to locate in the grid.
+            rel_type: Relationship type to set.
+            lag: Lag value to set.
         """
         logger.debug(
-            f"Editing relationship properties: type={rel_type}, lag={lag}"
+            "Editing relationship properties: type=%s, lag=%d", rel_type, lag
         )
 
         try:
-            # Find the row containing the predecessor ID
-            row = details_pane.child_window(
-                title_re=f".*{re.escape(predecessor_id)}.*"
-            )
-            if not row.exists(timeout=3):
+            grid = self._find_relationship_grid()
+            if grid is None:
                 logger.warning(
-                    f"Could not find relationship row for {predecessor_id}. "
-                    f"Type/lag may need manual adjustment."
+                    "Grid not found; type/lag may need manual adjustment"
                 )
                 return
 
-            # Edit relationship type if not default FS
+            # Find edit controls on the Relationships tab that may
+            # correspond to the selected grid row's editable cells.
+            edits = self._get_edit_children()
+
+            # Look for an edit control containing the default "FS" value
+            # to overwrite with the new relationship type
             if rel_type != "FS":
-                try:
-                    # Try to find and double-click the Type cell
-                    # The Type column is typically adjacent to the Activity ID
-                    type_cell = details_pane.child_window(
-                        title_re=".*FS.*",  # Current default value
-                        found_index=0
-                    )
-                    if type_cell.exists(timeout=2):
-                        type_cell.double_click_input()
-                        time.sleep(self.ACTION_DELAY)
-
-                        # Type the new relationship type
-                        self._window.type_keys(rel_type, with_spaces=True)
-                        time.sleep(self.ACTION_DELAY)
-                        self._window.type_keys("{ENTER}")
-                        time.sleep(self.ACTION_DELAY)
-
-                        logger.debug(f"Set relationship type to: {rel_type}")
-                    else:
-                        logger.warning(
-                            f"Could not find Type cell to change from FS to {rel_type}. "
-                            f"Manual adjustment may be needed."
-                        )
-                except Exception as e:
+                for idx, ctrl, text in edits:
+                    if text.strip() == "FS":
+                        self._edit_control_value(ctrl.handle, rel_type)
+                        logger.debug("Set relationship type to: %s", rel_type)
+                        break
+                else:
                     logger.warning(
-                        f"Failed to edit relationship type: {e}. "
-                        f"Manual adjustment may be needed."
+                        "Could not find Type cell to change from FS to %s. "
+                        "Manual adjustment may be needed.",
+                        rel_type,
                     )
 
-            # Edit lag if non-zero
+            # Look for an edit control containing "0" for the lag field
             if lag != 0:
-                try:
-                    # Try to find and double-click the Lag cell
-                    # The Lag column typically shows "0" or "0d"
-                    lag_cell = details_pane.child_window(
-                        title_re=".*Lag.*",
-                        control_type="DataItem"
-                    )
-                    if not lag_cell.exists(timeout=2):
-                        # Fallback: look for the cell showing "0"
-                        lag_cell = details_pane.child_window(
-                            title="0",
-                            control_type="DataItem",
-                            found_index=0
-                        )
-
-                    if lag_cell.exists(timeout=2):
-                        lag_cell.double_click_input()
-                        time.sleep(self.ACTION_DELAY)
-
-                        # Type the lag value
-                        self._window.type_keys(str(lag), with_spaces=True)
-                        time.sleep(self.ACTION_DELAY)
-                        self._window.type_keys("{ENTER}")
-                        time.sleep(self.ACTION_DELAY)
-
-                        logger.debug(f"Set relationship lag to: {lag}")
-                    else:
-                        logger.warning(
-                            f"Could not find Lag cell to set to {lag}. "
-                            f"Manual adjustment may be needed."
-                        )
-                except Exception as e:
+                for idx, ctrl, text in edits:
+                    if text.strip() in ("0", "0d", "0.0"):
+                        self._edit_control_value(ctrl.handle, str(lag))
+                        logger.debug("Set relationship lag to: %d", lag)
+                        break
+                else:
                     logger.warning(
-                        f"Failed to edit relationship lag: {e}. "
-                        f"Manual adjustment may be needed."
+                        "Could not find Lag cell to set to %d. "
+                        "Manual adjustment may be needed.",
+                        lag,
                     )
 
         except Exception as e:
             logger.warning(
-                f"Failed to edit relationship properties: {e}. "
-                f"Relationship was added but type/lag may need manual adjustment."
+                "Failed to edit relationship properties: %s. "
+                "Relationship was added but type/lag may need manual adjustment.",
+                e,
             )
 
     # =========================================================================
@@ -387,95 +581,100 @@ class P6RelationshipManager:
     # =========================================================================
 
     def remove_predecessor(self, activity_id: str, predecessor_id: str) -> bool:
-        """
-        Remove a predecessor relationship from an activity.
+        """Remove a predecessor relationship from an activity.
+
+        Selects the activity, switches to the Relationships tab, finds
+        the predecessor row in the grid, selects it, clicks Remove, and
+        handles the confirmation dialog.
 
         Args:
-            activity_id: Target activity ID (the successor)
-            predecessor_id: Predecessor activity ID to remove
+            activity_id: Target activity ID (the successor).
+            predecessor_id: Predecessor activity ID to remove.
 
         Returns:
-            True if relationship removed successfully
+            ``True`` if relationship removed successfully, ``False`` otherwise.
 
         Raises:
-            P6SafeModeError: If safe_mode is True
+            P6SafeModeError: If safe_mode is True.
         """
         self._check_safe_mode("Remove Predecessor")
 
         logger.info(
-            f"Removing predecessor: {predecessor_id} from {activity_id}"
+            "Removing predecessor: %s from %s", predecessor_id, activity_id
         )
 
         try:
             # Select the target activity
             if not self._activity_manager.select_activity(activity_id):
-                logger.error(f"Could not select activity: {activity_id}")
+                logger.error("Could not select activity: %s", activity_id)
                 return False
 
             # Switch to Relationships tab
-            self._select_details_tab("Relationships")
+            self._select_relationships_tab()
 
-            # Get the details pane
-            details_pane = self._get_details_pane()
+            # Find the predecessor row in the grid
+            grid = self._find_relationship_grid()
+            if grid is None:
+                raise P6EditError("Relationship grid not found")
 
-            # Find the predecessor in the relationships grid
-            predecessor_row = details_pane.child_window(
-                title_re=f".*{re.escape(predecessor_id)}.*"
-            )
-            if not predecessor_row.exists(timeout=5):
-                logger.error(
-                    f"Predecessor {predecessor_id} not found in "
-                    f"relationships for {activity_id}"
-                )
-                return False
-
-            # Click to select the row
-            immediate_click(predecessor_row)
-            time.sleep(self.ACTION_DELAY)
-
-            # Try "Remove" or "Delete" button first
+            # Try to find and click the row containing predecessor_id
+            row_found: bool = False
             try:
-                remove_button = details_pane.child_window(
-                    title_re=".*Remove.*|.*Delete.*", control_type="Button"
-                )
-                if remove_button.exists(timeout=2):
-                    immediate_click(remove_button)
-                    time.sleep(self.ACTION_DELAY)
-                else:
-                    # Fallback: use Delete key
-                    logger.debug("No Remove button found; using Delete key")
-                    self._window.type_keys("{DELETE}")
-                    time.sleep(self.ACTION_DELAY)
-            except Exception:
-                # Fallback: use Delete key
-                logger.debug("Remove button not accessible; using Delete key")
-                self._window.type_keys("{DELETE}")
-                time.sleep(self.ACTION_DELAY)
-
-            # Handle confirmation dialog if one appears
-            try:
-                confirm = Desktop(backend="uia").window(
-                    title_re=".*Confirm.*|.*Delete.*|.*Remove.*"
-                )
-                if confirm.exists(timeout=2):
-                    yes_button = confirm.child_window(
-                        title_re=".*Yes.*|.*OK.*", control_type="Button"
-                    )
-                    if yes_button.exists(timeout=2):
-                        immediate_click(yes_button)
-                        time.sleep(self.ACTION_DELAY)
+                grid_children = grid.children()
+                for child in grid_children:
+                    try:
+                        text: str = child.window_text()
+                        if predecessor_id in text:
+                            child.click_input()
+                            time.sleep(self.ACTION_DELAY)
+                            row_found = True
+                            break
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
-            logger.info(
-                f"Removed predecessor: {predecessor_id} from {activity_id}"
+            if not row_found:
+                logger.error(
+                    "Predecessor %s not found in relationships for %s",
+                    predecessor_id, activity_id,
+                )
+                return False
+
+            # Start confirmation dialog handler BEFORE clicking Remove
+            dialog_thread, dialog_result = self._handle_confirmation_dialog(
+                accept=True
             )
+
+            # Find and click the Remove button
+            remove_btn = self._find_button("Remove")
+            if remove_btn is not None:
+                remove_btn.click_input()
+                time.sleep(self.ACTION_DELAY)
+            else:
+                # Fallback: send Delete key to the grid
+                logger.debug("No Remove button found; sending Delete key")
+                self._attach_thread()
+                grid_handle: int = grid.handle
+                ctypes.windll.user32.SendMessageW(
+                    grid_handle, WM_KEYDOWN, 0x2E, 0  # VK_DELETE
+                )
+                time.sleep(self.ACTION_DELAY)
+
+            # Wait for confirmation dialog handler
+            dialog_thread.join(timeout=self.DIALOG_TIMEOUT)
+
+            logger.info(
+                "Removed predecessor: %s from %s", predecessor_id, activity_id
+            )
+            self._detach_thread()
             return True
 
         except P6SafeModeError:
             raise
         except Exception as e:
-            logger.error(f"Failed to remove predecessor: {e}")
+            self._detach_thread()
+            logger.error("Failed to remove predecessor: %s", e)
             return False
 
     # =========================================================================
@@ -487,44 +686,43 @@ class P6RelationshipManager:
         activity_id: str,
         successor_id: str,
         rel_type: str = "FS",
-        lag: int = 0
+        lag: int = 0,
     ) -> bool:
-        """
-        Add a successor relationship to an activity.
+        """Add a successor relationship to an activity.
 
-        This is semantically equivalent to adding a predecessor relationship
-        with swapped arguments: the activity becomes the predecessor of the
-        successor.
+        Semantically equivalent to adding a predecessor relationship
+        with swapped arguments: *activity_id* becomes the predecessor
+        of *successor_id*.
 
         Args:
-            activity_id: Activity that will be the predecessor
-            successor_id: Activity that will be the successor
-            rel_type: Relationship type - FS, SS, FF, or SF (default "FS")
-            lag: Lag value in days (default 0)
+            activity_id: Activity that will be the predecessor.
+            successor_id: Activity that will be the successor.
+            rel_type: Relationship type — FS, SS, FF, or SF (default "FS").
+            lag: Lag value in days (default 0).
 
         Returns:
-            True if relationship added successfully
+            ``True`` if relationship added successfully, ``False`` otherwise.
 
         Raises:
-            P6SafeModeError: If safe_mode is True
-            ValueError: If rel_type is not valid
+            P6SafeModeError: If safe_mode is True.
+            ValueError: If rel_type is not valid.
         """
         logger.info(
-            f"Adding successor: {activity_id} -> {successor_id} "
-            f"({rel_type}, lag={lag})"
+            "Adding successor: %s -> %s (%s, lag=%d)",
+            activity_id, successor_id, rel_type, lag,
         )
 
-        result = self.add_predecessor(
+        result: bool = self.add_predecessor(
             activity_id=successor_id,
             predecessor_id=activity_id,
             rel_type=rel_type,
-            lag=lag
+            lag=lag,
         )
 
         if result:
             logger.info(
-                f"Added successor: {activity_id} -> {successor_id} "
-                f"({rel_type}, lag={lag})"
+                "Added successor: %s -> %s (%s, lag=%d)",
+                activity_id, successor_id, rel_type, lag,
             )
 
         return result

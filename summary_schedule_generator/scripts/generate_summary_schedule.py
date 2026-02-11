@@ -12,20 +12,19 @@ Author: Senior Python Developer & P6 Data Engineer
 Date: 2026-01-20
 """
 
-import sys
-from pathlib import Path
-from typing import Dict, List, Tuple
-from datetime import datetime
-import pandas as pd
-import uuid
+from __future__ import annotations
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
+
+import pandas as pd
+
+from xer_utils import XERParser, XERWriter, write_template_table
 
 # Setup standalone logger to avoid config dependencies
-import logging
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)-8s | %(message)s',
@@ -34,84 +33,46 @@ logging.basicConfig(
 logger = logging.getLogger('summary_schedule_generator')
 
 
-class XERWriter:
-    """Helper class for writing XER format files."""
-
-    def __init__(self):
-        self.encoding = 'cp1252'  # Windows-1252 for P6 compatibility
-
-    def write_table_header(self, table_name: str) -> str:
-        """Generate table header line."""
-        return f"%T\t{table_name}\n"
-
-    def write_field_header(self, fields: List[str]) -> str:
-        """Generate field header line."""
-        return "%F\t" + "\t".join(fields) + "\n"
-
-    def write_record(self, values: List) -> str:
-        """Generate data record line."""
-        # Convert None to empty string, handle all types
-        str_values = []
-        for v in values:
-            if v is None or (isinstance(v, float) and pd.isna(v)):
-                str_values.append("")
-            else:
-                str_values.append(str(v))
-        return "%R\t" + "\t".join(str_values) + "\n"
-
-    def format_datetime(self, dt) -> str:
-        """Format datetime for P6 XER format (YYYY-MM-DD HH:MM)."""
-        if pd.isna(dt):
-            return ""
-        if isinstance(dt, str):
-            # Try to parse if it's a string
-            try:
-                dt = pd.to_datetime(dt)
-            except:
-                return ""
-        if isinstance(dt, datetime):
-            return dt.strftime("%Y-%m-%d %H:%M")
-        return ""
-
-
 class SummaryScheduleGenerator:
-    """
-    Generates P6 Summary Schedule from Excel data and template XER file.
-    """
+    """Generates P6 Summary Schedule from Excel data and template XER file."""
 
-    def __init__(self, template_xer: Path, summary_excel: Path, output_xer: Path):
-        """
-        Initialize the generator.
+    def __init__(
+        self,
+        template_xer: Path,
+        summary_excel: Path,
+        output_xer: Path,
+    ) -> None:
+        """Initialize the generator.
 
         Args:
-            template_xer: Path to template XER file
-            summary_excel: Path to Excel file with summary data
-            output_xer: Path for output XER file
+            template_xer: Path to template XER file.
+            summary_excel: Path to Excel file with summary data.
+            output_xer: Path for output XER file.
         """
-        self.template_xer = template_xer
-        self.summary_excel = summary_excel
-        self.output_xer = output_xer
-        self.writer = XERWriter()
+        self.template_xer: Path = template_xer
+        self.summary_excel: Path = summary_excel
+        self.output_xer: Path = output_xer
+        self.writer: XERWriter = XERWriter()
 
         # Data containers
-        self.template_tables = {}
-        self.summary_df = None
-        self.proj_id = None
-        self.root_wbs_id = None
-        self.default_calendar_id = None
+        self.template_tables: dict[str, Any] = {}
+        self.summary_df: Optional[pd.DataFrame] = None
+        self.proj_id: Optional[str] = None
+        self.root_wbs_id: Optional[str] = None
+        self.default_calendar_id: Optional[str] = None
 
-    def run(self):
+    def run(self) -> None:
         """Main execution flow."""
-        logger.info("="*80)
+        logger.info("=" * 80)
         logger.info("P6 Summary Schedule Generator")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         try:
             # Step 1: Load and filter summary data
             self._load_summary_data()
 
             # Step 2: Parse template XER
-            self._parse_template_xer()
+            self.template_tables = XERParser.parse(self.template_xer)
 
             # Step 3: Extract project metadata
             self._extract_project_metadata()
@@ -125,15 +86,15 @@ class SummaryScheduleGenerator:
             # Step 6: Validate output dates match input dates
             self._validate_output_dates(tasks_df)
 
-            logger.info("="*80)
+            logger.info("=" * 80)
             logger.info(f"✓ Successfully generated summary schedule: {self.output_xer}")
-            logger.info("="*80)
+            logger.info("=" * 80)
 
         except Exception as e:
             logger.error(f"Failed to generate summary schedule: {e}")
             raise
 
-    def _load_summary_data(self):
+    def _load_summary_data(self) -> None:
         """Load and filter summary data from Excel."""
         logger.info(f"Loading summary data from: {self.summary_excel}")
 
@@ -152,7 +113,7 @@ class SummaryScheduleGenerator:
         # Filter out rows with empty WBS names
         original_count = len(self.summary_df)
         self.summary_df = self.summary_df[
-            self.summary_df['WBS'].notna() & 
+            self.summary_df['WBS'].notna() &
             (self.summary_df['WBS'].astype(str).str.strip() != '')
         ]
         filtered_count = len(self.summary_df)
@@ -181,82 +142,7 @@ class SummaryScheduleGenerator:
         if invalid_finish > 0:
             logger.warning(f"{invalid_finish} rows have invalid Finish dates")
 
-    def _parse_template_xer(self):
-        """Parse the template XER file to extract tables."""
-        logger.info(f"Parsing template XER: {self.template_xer}")
-
-        # Read file with fallback encoding
-        try:
-            with open(self.template_xer, 'r', encoding='cp1252') as f:
-                content = f.read()
-        except UnicodeDecodeError:
-            logger.warning("cp1252 encoding failed, trying utf-8")
-            with open(self.template_xer, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-        lines = content.split('\n')
-
-        # Extract tables
-        current_table = None
-        current_fields = []
-        current_data = []
-
-        for line in lines:
-            line = line.strip()
-
-            if not line:
-                continue
-
-            # Table marker
-            if line.startswith('%T'):
-                # Save previous table
-                if current_table and current_fields and current_data:
-                    self.template_tables[current_table] = {
-                        'fields': current_fields,
-                        'data': current_data
-                    }
-                    logger.debug(f"Extracted table '{current_table}': {len(current_data)} rows")
-
-                # Start new table
-                parts = line.split('\t')
-                current_table = parts[1] if len(parts) > 1 else line[2:].strip()
-                current_fields = []
-                current_data = []
-
-            # Field marker
-            elif line.startswith('%F'):
-                parts = line.split('\t')
-                current_fields = [p.strip() for p in parts[1:] if p.strip()]
-
-            # Data row
-            elif line.startswith('%R'):
-                parts = line.split('\t')
-                values = parts[1:]  # Skip %R marker
-
-                # Pad or trim to match field count
-                if len(values) < len(current_fields):
-                    values.extend([''] * (len(current_fields) - len(values)))
-                elif len(values) > len(current_fields):
-                    values = values[:len(current_fields)]
-
-                current_data.append(values)
-
-            # Header line (ERMHDR)
-            elif line.startswith('ERMHDR'):
-                self.template_tables['ERMHDR'] = line
-
-        # Save last table
-        if current_table and current_fields and current_data:
-            self.template_tables[current_table] = {
-                'fields': current_fields,
-                'data': current_data
-            }
-            logger.debug(f"Extracted table '{current_table}': {len(current_data)} rows")
-
-        logger.info(f"Extracted {len(self.template_tables)} tables from template")
-        logger.debug(f"Tables: {list(self.template_tables.keys())}")
-
-    def _extract_project_metadata(self):
+    def _extract_project_metadata(self) -> None:
         """Extract project ID, root WBS ID, and default calendar from template."""
         logger.info("Extracting project metadata from template")
 
@@ -275,7 +161,6 @@ class SummaryScheduleGenerator:
             fields = self.template_tables['PROJWBS']['fields']
 
             wbs_id_idx = fields.index('wbs_id')
-            parent_wbs_idx = fields.index('parent_wbs_id')
             proj_node_idx = fields.index('proj_node_flag')
 
             # Find root WBS (proj_node_flag = 'Y')
@@ -298,16 +183,15 @@ class SummaryScheduleGenerator:
             raise ValueError("Could not extract required project metadata from template")
 
     def _generate_tasks(self) -> pd.DataFrame:
-        """
-        Generate TASK table from summary data.
+        """Generate TASK table from summary data.
 
         Returns:
-            pd.DataFrame with task data
+            DataFrame with task data.
         """
         logger.info("Generating tasks from summary data")
 
-        tasks = []
-        base_task_id = 4600000  # Start with a high ID to avoid conflicts
+        tasks: list[dict[str, Any]] = []
+        base_task_id: int = 4600000  # Start with a high ID to avoid conflicts
 
         for idx, row in self.summary_df.iterrows():
             task_id = base_task_id + idx
@@ -329,7 +213,7 @@ class SummaryScheduleGenerator:
                 target_drtn_hr_cnt = 0
 
             # Build task record
-            task = {
+            task: dict[str, Any] = {
                 'task_id': task_id,
                 'proj_id': self.proj_id,
                 'wbs_id': self.root_wbs_id,  # All tasks under root WBS
@@ -363,15 +247,14 @@ class SummaryScheduleGenerator:
 
         return tasks_df
 
-    def _validate_output_dates(self, tasks_df: pd.DataFrame):
-        """
-        Validate that output XER dates match the input Excel dates.
-        
+    def _validate_output_dates(self, tasks_df: pd.DataFrame) -> None:
+        """Validate that output XER dates match the input Excel dates.
+
         Args:
-            tasks_df: DataFrame with generated task data
+            tasks_df: DataFrame with generated task data.
         """
         logger.info("Validating output dates against input Excel data...")
-        
+
         # Read the generated XER file to extract task dates
         try:
             with open(self.output_xer, 'r', encoding='cp1252') as f:
@@ -379,12 +262,12 @@ class SummaryScheduleGenerator:
         except Exception as e:
             logger.error(f"Could not read output XER for validation: {e}")
             return
-        
+
         # Parse TASK table from XER
-        xer_tasks = {}
+        xer_tasks: dict[str, dict[str, str]] = {}
         in_task_table = False
-        task_fields = []
-        
+        task_fields: list[str] = []
+
         for line in xer_content.split('\n'):
             line = line.strip()
             if line.startswith('%T') and 'TASK' in line:
@@ -404,23 +287,23 @@ class SummaryScheduleGenerator:
                         'target_start_date': task_dict.get('target_start_date', ''),
                         'target_end_date': task_dict.get('target_end_date', '')
                     }
-        
+
         # Compare with source data
-        matches = 0
-        mismatches = 0
-        
+        matches: int = 0
+        mismatches: int = 0
+
         for _, row in self.summary_df.iterrows():
             activity_code = str(row['Activity Code'])
             excel_start = self.writer.format_datetime(row['Start'])
             excel_finish = self.writer.format_datetime(row['Finish'])
-            
+
             if activity_code in xer_tasks:
                 xer_start = xer_tasks[activity_code]['target_start_date']
                 xer_finish = xer_tasks[activity_code]['target_end_date']
-                
+
                 start_match = excel_start == xer_start
                 finish_match = excel_finish == xer_finish
-                
+
                 if start_match and finish_match:
                     matches += 1
                 else:
@@ -433,7 +316,7 @@ class SummaryScheduleGenerator:
             else:
                 mismatches += 1
                 logger.warning(f"Activity {activity_code} not found in XER output")
-        
+
         # Report results
         total = matches + mismatches
         logger.info(f"Date Validation Complete: {matches}/{total} activities matched")
@@ -442,91 +325,37 @@ class SummaryScheduleGenerator:
         else:
             logger.warning(f"⚠ {mismatches} activities had date mismatches")
 
-    def _write_output_xer(self, tasks_df: pd.DataFrame):
-        """
-        Write the output XER file.
+    def _write_output_xer(self, tasks_df: pd.DataFrame) -> None:
+        """Write the output XER file.
 
         Args:
-            tasks_df: DataFrame with task data
+            tasks_df: DataFrame with task data.
         """
         logger.info(f"Writing output XER: {self.output_xer}")
 
-        output_lines = []
+        output_lines: list[str] = []
 
         # 1. Write ERMHDR
         if 'ERMHDR' in self.template_tables:
             output_lines.append(self.template_tables['ERMHDR'] + '\n')
 
-        # 2. Write CURRTYPE table (currency definitions)
-        if 'CURRTYPE' in self.template_tables:
-            output_lines.append(self.writer.write_table_header('CURRTYPE'))
-            output_lines.append(self.writer.write_field_header(
-                self.template_tables['CURRTYPE']['fields']
-            ))
-            for row in self.template_tables['CURRTYPE']['data']:
-                output_lines.append(self.writer.write_record(row))
-
-        # 3. Write other metadata tables (FINTMPL, NONWORK, OBS, PCATTYPE, etc.)
-        metadata_tables = ['FINTMPL', 'NONWORK', 'OBS', 'PCATTYPE', 'UDFTYPE', 'PCATVAL']
-        for table_name in metadata_tables:
+        # 2. Write template tables using shared helper
+        template_table_order: list[str] = [
+            'CURRTYPE', 'FINTMPL', 'NONWORK', 'OBS', 'PCATTYPE',
+            'UDFTYPE', 'PCATVAL', 'PROJECT', 'CALENDAR', 'PROJPCAT',
+            'SCHEDOPTIONS', 'PROJWBS',
+        ]
+        for table_name in template_table_order:
             if table_name in self.template_tables:
-                output_lines.append(self.writer.write_table_header(table_name))
-                output_lines.append(self.writer.write_field_header(
-                    self.template_tables[table_name]['fields']
-                ))
-                for row in self.template_tables[table_name]['data']:
-                    output_lines.append(self.writer.write_record(row))
+                output_lines.append(
+                    write_template_table(self.writer, table_name, self.template_tables[table_name])
+                )
 
-        # 4. Write PROJECT table
-        if 'PROJECT' in self.template_tables:
-            output_lines.append(self.writer.write_table_header('PROJECT'))
-            output_lines.append(self.writer.write_field_header(
-                self.template_tables['PROJECT']['fields']
-            ))
-            for row in self.template_tables['PROJECT']['data']:
-                output_lines.append(self.writer.write_record(row))
-
-        # 5. Write CALENDAR table
-        if 'CALENDAR' in self.template_tables:
-            output_lines.append(self.writer.write_table_header('CALENDAR'))
-            output_lines.append(self.writer.write_field_header(
-                self.template_tables['CALENDAR']['fields']
-            ))
-            for row in self.template_tables['CALENDAR']['data']:
-                output_lines.append(self.writer.write_record(row))
-
-        # 6. Write PROJPCAT table
-        if 'PROJPCAT' in self.template_tables:
-            output_lines.append(self.writer.write_table_header('PROJPCAT'))
-            output_lines.append(self.writer.write_field_header(
-                self.template_tables['PROJPCAT']['fields']
-            ))
-            for row in self.template_tables['PROJPCAT']['data']:
-                output_lines.append(self.writer.write_record(row))
-
-        # 7. Write SCHEDOPTIONS table
-        if 'SCHEDOPTIONS' in self.template_tables:
-            output_lines.append(self.writer.write_table_header('SCHEDOPTIONS'))
-            output_lines.append(self.writer.write_field_header(
-                self.template_tables['SCHEDOPTIONS']['fields']
-            ))
-            for row in self.template_tables['SCHEDOPTIONS']['data']:
-                output_lines.append(self.writer.write_record(row))
-
-        # 8. Write PROJWBS table
-        if 'PROJWBS' in self.template_tables:
-            output_lines.append(self.writer.write_table_header('PROJWBS'))
-            output_lines.append(self.writer.write_field_header(
-                self.template_tables['PROJWBS']['fields']
-            ))
-            for row in self.template_tables['PROJWBS']['data']:
-                output_lines.append(self.writer.write_record(row))
-
-        # 9. Write TASK table (our generated tasks)
+        # 3. Write TASK table (our generated tasks)
         output_lines.append(self.writer.write_table_header('TASK'))
 
         # Define the fields for TASK table based on P6 XER standard
-        task_fields = [
+        task_fields: list[str] = [
             'task_id', 'proj_id', 'wbs_id', 'clndr_id', 'phys_complete_pct',
             'rev_fdbk_flag', 'est_wt', 'lock_plan_flag', 'auto_compute_act_flag',
             'complete_pct_type', 'task_type', 'duration_type', 'status_code',
@@ -544,7 +373,7 @@ class SummaryScheduleGenerator:
 
         # Write task records
         for _, task in tasks_df.iterrows():
-            values = []
+            values: list[Any] = []
             for field in task_fields:
                 if field in task:
                     values.append(task[field])
@@ -563,7 +392,7 @@ class SummaryScheduleGenerator:
 
             output_lines.append(self.writer.write_record(values))
 
-        # 10. Write empty TASKPRED table (no logic links)
+        # 4. Write empty TASKPRED table (no logic links)
         output_lines.append(self.writer.write_table_header('TASKPRED'))
         output_lines.append(self.writer.write_field_header([
             'task_pred_id', 'task_id', 'pred_task_id', 'pred_type', 'lag_hr_cnt'
@@ -579,7 +408,7 @@ class SummaryScheduleGenerator:
         logger.info(f"Wrote {len(tasks_df)} tasks to output XER file")
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     # Define file paths using organized folder structure
     script_dir = Path(__file__).parent
@@ -588,7 +417,7 @@ def main():
     # Input/Output paths
     template_xer = base_dir / "templates" / "19282-FS-Summary-FS-EXE.xer"
     summary_excel = base_dir / "input" / "WBS Summary.xlsx"
-    
+
     # Generate date stamp for output filename (format: DD_Mon_YYYY)
     date_stamp = datetime.now().strftime("%d_%b_%Y")
     output_xer = base_dir / "output" / f"19282_Summary_Schedule_Generated_{date_stamp}.xer"
