@@ -25,7 +25,7 @@ from .exceptions import (
     P6TimeoutError,
     P6SafeModeError
 )
-from .utils import wait_for_condition
+from .utils import wait_for_condition, immediate_click, immediate_type
 
 
 class P6ActivityManager:
@@ -304,9 +304,56 @@ class P6ActivityManager:
         return columns
     
     # =========================================================================
+    # Details Pane Helpers
+    # =========================================================================
+
+    def _get_details_pane(self):
+        """
+        Locate the Activity Details bottom pane.
+
+        Returns:
+            Details pane wrapper, or None if not found.
+        """
+        try:
+            # The details pane is typically a Pane control below the activity grid
+            pane = self._window.child_window(
+                title_re=".*Detail.*|.*Activity Detail.*",
+                control_type="Pane"
+            )
+            if pane.exists():
+                return pane
+        except Exception as e:
+            logger.debug(f"Details pane not found: {e}")
+        # Fallback: return the main window itself for child searches
+        return self._window
+
+    def _select_details_tab(self, tab_name: str) -> bool:
+        """
+        Select a tab in the Activity Details pane.
+
+        Args:
+            tab_name: Tab name (e.g. 'General', 'Status', 'Resources')
+
+        Returns:
+            True if tab selected
+        """
+        try:
+            details_pane = self._get_details_pane()
+            tab_control = details_pane.child_window(control_type="TabControl")
+            if tab_control.exists():
+                tab_item = tab_control.child_window(title=tab_name)
+                tab_item.click_input()
+                time.sleep(self.ACTION_DELAY)
+                logger.debug(f"Selected details tab: {tab_name}")
+                return True
+        except Exception as e:
+            logger.debug(f"Could not select details tab '{tab_name}': {e}")
+        return False
+
+    # =========================================================================
     # Activity Editing
     # =========================================================================
-    
+
     def edit_activity_field(
         self,
         activity_id: str,
@@ -357,35 +404,145 @@ class P6ActivityManager:
             logger.error(f"Failed to edit activity: {e}")
             return False
     
-    def add_activity(self, wbs_path: Optional[str] = None) -> bool:
+    def create_activity(
+        self,
+        activity_name: str,
+        duration: int,
+        wbs_node: Optional[str] = None,
+        activity_type: Optional[str] = None,
+        calendar: Optional[str] = None
+    ) -> bool:
         """
-        Add a new activity.
-        
+        Create a new activity with specified properties.
+
         Args:
-            wbs_path: Optional WBS to add under
-            
+            activity_name: Name for the new activity
+            duration: Remaining duration in days
+            wbs_node: Optional WBS node to create activity under
+            activity_type: Optional activity type (e.g. 'Task Dependent')
+            calendar: Optional calendar assignment
+
         Returns:
-            True if activity added
+            True if activity created successfully
         """
-        self._check_safe_mode("Add Activity")
-        
-        logger.info("Adding new activity...")
-        
+        self._check_safe_mode("Create Activity")
+
+        logger.info(f"Creating activity: '{activity_name}' (duration={duration})")
+
         try:
             self._window.set_focus()
-            
-            # Insert key or Edit -> Add -> Activity
+            time.sleep(self.ACTION_DELAY)
+
+            # Navigate to WBS node if specified
+            if wbs_node:
+                logger.debug(f"Navigating to WBS node: {wbs_node}")
+                self._window.type_keys("^F")
+                time.sleep(self.ACTION_DELAY)
+
+                find_dialog = Desktop(backend="uia").window(title_re=".*Find.*")
+                if find_dialog.exists():
+                    find_dialog.wait("ready", timeout=self.DIALOG_TIMEOUT)
+
+                    edit = find_dialog.child_window(control_type="Edit", found_index=0)
+                    edit.set_text(wbs_node)
+                    time.sleep(self.ACTION_DELAY)
+
+                    find_button = find_dialog.child_window(
+                        title_re=".*Find.*Next.*",
+                        control_type="Button"
+                    )
+                    find_button.click_input()
+                    time.sleep(self.ACTION_DELAY)
+
+                    find_dialog.type_keys("{ESC}")
+                    time.sleep(self.ACTION_DELAY)
+                else:
+                    logger.error(f"Find dialog not found; cannot navigate to WBS '{wbs_node}'")
+                    return False
+
+            # Insert new activity
             self._window.type_keys("{INSERT}")
             time.sleep(self.ACTION_DELAY * 2)
-            
-            logger.info("✓ New activity added")
+
+            # Fill Activity Name (newly inserted row should be in edit mode)
+            self._window.type_keys(activity_name, with_spaces=True)
+            self._window.type_keys("{ENTER}")
+            time.sleep(self.ACTION_DELAY)
+
+            # Fill Duration via Details Form Status tab
+            if duration and duration > 0:
+                self._select_details_tab("Status")
+
+                details_pane = self._get_details_pane()
+                if details_pane:
+                    try:
+                        dur_field = details_pane.child_window(
+                            title_re=".*Remaining.*Dur.*",
+                            control_type="Edit"
+                        )
+                        dur_field.set_text("")
+                        dur_field.type_keys(str(duration), with_spaces=True)
+                        dur_field.type_keys("{ENTER}")
+                        time.sleep(self.ACTION_DELAY)
+                        logger.debug(f"Set duration: {duration}")
+                    except Exception as e:
+                        logger.warning(f"Could not set duration: {e}")
+
+            # Fill Activity Type via Details Form General tab
+            if activity_type:
+                self._select_details_tab("General")
+
+                details_pane = self._get_details_pane()
+                if details_pane:
+                    try:
+                        type_control = details_pane.child_window(
+                            title_re=".*Activity Type.*|.*Type.*",
+                            control_type="ComboBox"
+                        )
+                        try:
+                            type_control.select(activity_type)
+                        except Exception:
+                            type_control.type_keys(activity_type, with_spaces=True)
+                        time.sleep(self.ACTION_DELAY)
+                        logger.debug(f"Set activity type: {activity_type}")
+                    except Exception as e:
+                        logger.warning(f"Could not set activity type: {e}")
+
+            # Fill Calendar via Details Form General tab
+            if calendar:
+                if not activity_type:
+                    # Only switch tab if we didn't already in the type step
+                    self._select_details_tab("General")
+
+                details_pane = self._get_details_pane()
+                if details_pane:
+                    try:
+                        cal_control = details_pane.child_window(
+                            title_re=".*Calendar.*",
+                            control_type="ComboBox"
+                        )
+                        try:
+                            cal_control.select(calendar)
+                        except Exception:
+                            cal_control.type_keys(calendar, with_spaces=True)
+                        time.sleep(self.ACTION_DELAY)
+                        logger.debug(f"Set calendar: {calendar}")
+                    except Exception as e:
+                        logger.warning(f"Could not set calendar: {e}")
+
+            logger.info(f"Activity created: '{activity_name}'")
             return True
-            
+
         except P6SafeModeError:
             raise
         except Exception as e:
-            logger.error(f"Failed to add activity: {e}")
+            logger.error(f"Failed to create activity: {e}")
             return False
+
+    def add_activity(self, wbs_path: Optional[str] = None) -> bool:
+        """Deprecated: Use create_activity() instead."""
+        logger.warning("add_activity() is deprecated. Use create_activity() instead.")
+        return self.create_activity(activity_name="New Activity", duration=0, wbs_node=wbs_path)
     
     def delete_activity(self, activity_id: str) -> bool:
         """

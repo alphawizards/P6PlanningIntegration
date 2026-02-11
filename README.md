@@ -100,7 +100,7 @@ P6PlanningIntegration/
 
 ### Core Automation (`src/automation/`)
 | File | Class | Purpose |
-|------|-------|---------|
+|------|-------|---------
 | `base.py` | `P6AutomationBase` | Connection/window management |
 | `connection.py` | `P6ConnectionManager` | Process detection, login |
 | `navigation.py` | `P6Navigator` | Menu, toolbar, status bar |

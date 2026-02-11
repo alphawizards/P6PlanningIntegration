@@ -27,7 +27,10 @@ def retry(
 ):
     """
     Decorator to retry a function on failure.
-    
+
+    Note: Only used for connection retry (user-approved). DO NOT apply to
+    GUI element finding or clicking -- user requires immediate failure.
+
     Args:
         max_attempts: Maximum number of attempts
         delay: Delay between attempts in seconds
@@ -189,31 +192,28 @@ def capture_screenshot(
         raise
 
 
-def safe_click(control, retry_count: int = 3):
+def immediate_click(control):
     """
-    Safely click a control with retry logic.
-    
+    Click a control. No retries -- fails immediately if control not clickable.
+
+    Per user requirement: "No automatic retries -- stop immediately and tell the user."
+
     Args:
         control: pywinauto control wrapper
-        retry_count: Number of retries on failure
+
+    Raises:
+        Exception if click fails
     """
-    for attempt in range(retry_count):
-        try:
-            control.wait('visible', timeout=5)
-            control.click_input()
-            return
-        except Exception as e:
-            if attempt < retry_count - 1:
-                logger.warning(f"Click failed (attempt {attempt + 1}): {e}")
-                time.sleep(0.5)
-            else:
-                raise
+    control.wait('visible', timeout=5)
+    control.click_input()
 
 
-def safe_type(control, text: str, clear_first: bool = True):
+def immediate_type(control, text: str, clear_first: bool = True):
     """
-    Safely type text into a control.
-    
+    Type text into a control. No retries.
+
+    Per user requirement: "No automatic retries -- stop immediately and tell the user."
+
     Args:
         control: pywinauto control wrapper
         text: Text to type
@@ -223,6 +223,12 @@ def safe_type(control, text: str, clear_first: bool = True):
     if clear_first:
         control.set_text('')
     control.type_keys(text, with_spaces=True)
+
+
+# Deprecated: Use immediate_click instead
+safe_click = immediate_click
+# Deprecated: Use immediate_type instead
+safe_type = immediate_type
 
 
 def get_timestamp() -> str:

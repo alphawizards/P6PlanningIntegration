@@ -54,6 +54,11 @@ class P6ExportError(P6AutomationError):
     pass
 
 
+class P6EditError(P6AutomationError):
+    """Failed to edit activity data in P6."""
+    pass
+
+
 class P6ScheduleError(P6AutomationError):
     """Failed to schedule project in P6."""
     pass
@@ -61,4 +66,9 @@ class P6ScheduleError(P6AutomationError):
 
 class P6SafeModeError(P6AutomationError):
     """Operation blocked by safe mode."""
+    pass
+
+
+class P6UnexpectedDialogError(P6AutomationError):
+    """Unexpected modal dialog appeared in P6."""
     pass

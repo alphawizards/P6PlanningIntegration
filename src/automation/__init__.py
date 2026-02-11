@@ -32,6 +32,8 @@ from .scheduling import (
     ScheduleOption
 )
 from .activities import P6ActivityManager
+from .activity_editor import P6ActivityEditor
+from .relationships import P6RelationshipManager
 from .batch import (
     P6BatchProcessor,
     BatchStatus,
@@ -43,6 +45,7 @@ from .agent import (
     ActionType,
     ActionResult
 )
+from .state import P6StateTracker
 from .exceptions import (
     P6AutomationError,
     P6NotFoundError,
@@ -54,8 +57,10 @@ from .exceptions import (
     P6LayoutNotFoundError,
     P6PrintError,
     P6ExportError,
+    P6EditError,
     P6ScheduleError,
-    P6SafeModeError
+    P6SafeModeError,
+    P6UnexpectedDialogError
 )
 
 __all__ = [
@@ -71,8 +76,11 @@ __all__ = [
     'P6ScheduleManager',
     'P6BaselineManager',
     'P6ActivityManager',
+    'P6ActivityEditor',
+    'P6RelationshipManager',
     'P6BatchProcessor',
     'P6AgentInterface',
+    'P6StateTracker',
     # Enums & Data Classes
     'PageOrientation',
     'PageSize',
@@ -99,6 +107,8 @@ __all__ = [
     'P6LayoutNotFoundError',
     'P6PrintError',
     'P6ExportError',
+    'P6EditError',
     'P6ScheduleError',
-    'P6SafeModeError'
+    'P6SafeModeError',
+    'P6UnexpectedDialogError'
 ]
