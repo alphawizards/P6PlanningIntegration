@@ -13,7 +13,7 @@ This roadmap transforms P6 Professional from a complex desktop application requi
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Connection & Navigation Foundation** - Detect P6, navigate EPS, open projects, track state
-- [ ] **Phase 2: Activity Editing with Safety** - Edit dates/durations/logic with validation and rollback
+- [x] **Phase 2: Activity Editing with Safety** - Edit dates/durations/logic with validation and rollback
 - [ ] **Phase 3: Scheduling Operations** - Run scheduler, read logic, validate constraints, analyze critical path
 - [ ] **Phase 4: Import & Export** - Import XER/XML, export schedules, print PDFs with custom naming
 - [ ] **Phase 5: Layouts & Filters** - Apply layouts, filters, create/modify layout definitions
@@ -122,9 +122,9 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Connection & Navigation Foundation | 0/3 | Planned | - |
-| 2. Activity Editing with Safety | 0/4 | Planned | - |
-| 3. Scheduling Operations | 0/TBD | Not started | - |
+| 1. Connection & Navigation Foundation | 3/3 | Complete | 2026-02-07 |
+| 2. Activity Editing with Safety | 4/4 | Complete | 2026-02-11 |
+| 3. Scheduling Operations | 0/TBD | Planning | - |
 | 4. Import & Export | 0/TBD | Not started | - |
 | 5. Layouts & Filters | 0/TBD | Not started | - |
 | 6. Natural Language Interface | 0/TBD | Not started | - |

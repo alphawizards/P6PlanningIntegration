@@ -1,0 +1,59 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(grep:*)",
+      "Bash(git:*)", "Bash(npm:*)", "Bash(node:*)", "Bash(python*:*)",
+      "Bash(uv:*)", "Bash(mkdir:*)", "Bash(cp:*)", "Bash(mv:*)",
+      "Read", "Write", "Edit", "MultiEdit"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "uv run /home/ckr_4/p6project/.claude/hooks/pre_tool_use.py"
+        },
+        {
+          "type": "command",
+          "command": "uv run /home/ckr_4/p6project/.claude/hooks/send_event.py --source-app p6-planning --event-type PreToolUse --summarize"
+        }
+      ]
+    }],
+    "PostToolUse": [{
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "uv run /home/ckr_4/p6project/.claude/hooks/post_tool_use.py"
+        },
+        {
+          "type": "command",
+          "command": "uv run /home/ckr_4/p6project/.claude/hooks/send_event.py --source-app p6-planning --event-type PostToolUse --summarize"
+        }
+      ]
+    }],
+    "Notification": [{
+      "hooks": [{
+        "type": "command",
+        "command": "uv run /home/ckr_4/p6project/.claude/hooks/send_event.py --source-app p6-planning --event-type Notification --summarize"
+      }]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "uv run /home/ckr_4/p6project/.claude/hooks/send_event.py --source-app p6-planning --event-type Stop --summarize"
+      }]
+    }],
+    "SubagentStop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "uv run /home/ckr_4/p6project/.claude/hooks/send_event.py --source-app p6-planning --event-type SubagentStop --summarize"
+      }]
+    }]
+  }
+}

@@ -57,6 +57,7 @@ from .exceptions import (
     P6LayoutNotFoundError,
     P6PrintError,
     P6ExportError,
+    P6EditError,
     P6ScheduleError,
     P6SafeModeError,
     P6UnexpectedDialogError
@@ -106,6 +107,7 @@ __all__ = [
     'P6LayoutNotFoundError',
     'P6PrintError',
     'P6ExportError',
+    'P6EditError',
     'P6ScheduleError',
     'P6SafeModeError',
     'P6UnexpectedDialogError'
